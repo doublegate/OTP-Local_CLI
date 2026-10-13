@@ -32,7 +32,7 @@ try:
     from fido2.hid import CtapHidDevice
 
     HAS_FIDO2 = True
-except ImportError:
+except ImportError, Exception:
     HAS_FIDO2 = False
 
 _device_override: list[Any] | None = None

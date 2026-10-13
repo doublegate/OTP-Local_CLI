@@ -2852,6 +2852,7 @@ class BackendSelectModal(ModalScreen[str | None]):
         Binding("6", "select_6", "keychain", show=False),
         Binding("7", "select_7", "dpapi", show=False),
         Binding("8", "select_8", "fido2", show=False),
+        Binding("9", "select_9", "bitwarden", show=False),
     ]
 
     def __init__(self, current_backend: str = "onepassword", **kwargs) -> None:
@@ -2870,6 +2871,7 @@ class BackendSelectModal(ModalScreen[str | None]):
                 Option("6  macOS Keychain (keychain)", id="opt-keychain"),
                 Option("7  Windows DPAPI (dpapi)", id="opt-dpapi"),
                 Option("8  FIDO2 Security Key (fido2)", id="opt-fido2"),
+                Option("9  Bitwarden Vault (bitwarden)", id="opt-bitwarden"),
                 id="backend-select-list",
             )
             with Horizontal(id="backend-button-bar"):
@@ -2887,6 +2889,7 @@ class BackendSelectModal(ModalScreen[str | None]):
             "keychain": 5,
             "dpapi": 6,
             "fido2": 7,
+            "bitwarden": 8,
         }
         opt_list.highlighted = mapping.get(self.current_backend, 0)
         opt_list.focus()
@@ -2915,6 +2918,9 @@ class BackendSelectModal(ModalScreen[str | None]):
     def action_select_8(self) -> None:
         self._choose("fido2")
 
+    def action_select_9(self) -> None:
+        self._choose("bitwarden")
+
     def action_cancel_select(self) -> None:
         self.dismiss(None)
 
@@ -2929,6 +2935,7 @@ class BackendSelectModal(ModalScreen[str | None]):
             "keychain",
             "dpapi",
             "fido2",
+            "bitwarden",
         ]
         if event.option_index is not None and 0 <= event.option_index < len(backends):
             self._choose(backends[event.option_index])
@@ -2945,6 +2952,7 @@ class BackendSelectModal(ModalScreen[str | None]):
             "keychain",
             "dpapi",
             "fido2",
+            "bitwarden",
         ]
         if opt_list.highlighted is not None and 0 <= opt_list.highlighted < len(backends):
             self._choose(backends[opt_list.highlighted])
@@ -3326,6 +3334,11 @@ class AddOtpModal(ModalScreen[None]):
                         value=(self.current_backend == "fido2"),
                         id="chk-fido2",
                     )
+                    yield Checkbox(
+                        "Bitwarden Vault",
+                        value=(self.current_backend == "bitwarden"),
+                        id="chk-bitwarden",
+                    )
 
                 yield Static("", id="add-otp-status-banner")
 
@@ -3528,8 +3541,9 @@ class AddOtpModal(ModalScreen[None]):
         save_keychain = self.query_one("#chk-keychain", Checkbox).value
         save_dpapi = self.query_one("#chk-dpapi", Checkbox).value
         save_fido2 = self.query_one("#chk-fido2", Checkbox).value
+        save_bw = self.query_one("#chk-bitwarden", Checkbox).value
 
-        if not any((save_op, save_pass, save_tpm, save_keychain, save_dpapi, save_fido2)):
+        if not any((save_op, save_pass, save_tpm, save_keychain, save_dpapi, save_fido2, save_bw)):
             self._set_status("[red]Error: Select at least one target backend storage.[/]")
             return
 
@@ -3682,6 +3696,17 @@ class AddOtpModal(ModalScreen[None]):
                     enrolled.append("FIDO2 Security Key")
                 except Exception as exc:
                     errors.append(f"FIDO2: {exc}")
+
+            # 7. Bitwarden Vault
+            if save_bw:
+                try:
+                    from .backends import bitwarden
+
+                    raw_acc = title or "default"
+                    await asyncio.to_thread(bitwarden.bitwarden_enroll, raw_acc, uri, env)
+                    enrolled.append("Bitwarden")
+                except Exception as exc:
+                    errors.append(f"Bitwarden: {exc}")
 
             if errors:
                 err_text = "; ".join(errors)

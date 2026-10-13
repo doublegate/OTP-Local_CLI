@@ -234,6 +234,10 @@ def collect_backend_tokens(
                 except ValueError, AppError:
                     pass
         return tokens
+    if backend == "bitwarden":
+        from .backends import bitwarden
+
+        return bitwarden.collect_tokens(env)
     if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
         return []
 

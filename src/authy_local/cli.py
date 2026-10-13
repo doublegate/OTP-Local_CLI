@@ -116,6 +116,7 @@ def parser() -> Parser:
                 "keychain",
                 "dpapi",
                 "fido2",
+                "bitwarden",
             ),
             default="onepassword",
         )
@@ -387,6 +388,29 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                     fido2.fido2_add_backup_token(args.account, secret, env)
                 else:
                     fido2.fido2_enroll(args.account, secret, env)
+            elif args.backend == "bitwarden":
+                from .backends import bitwarden
+
+                title = getattr(args, "title", None) or args.account
+                if not title:
+                    raise AppError(2)
+                if not secret:
+                    import warnings
+                    from getpass import GetPassWarning, getpass
+
+                    confirmation = ""
+                    try:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("error", GetPassWarning)
+                            secret = getpass("Base32 secret or TOTP URI (hidden): ")
+                            confirmation = getpass("Repeat enrollment value (hidden): ")
+                        if secret != confirmation:
+                            raise AppError(2)
+                    except GetPassWarning:
+                        raise AppError(3) from None
+                    finally:
+                        confirmation = ""
+                bitwarden.bitwarden_enroll(title, secret, env)
             else:
                 from .backends import local
 
@@ -448,8 +472,21 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 selected_id = launch_picker(rows, env, launcher=args.launcher)
                 scope = Scope(selected_id, account, vault)
                 code = retrieve(scope, env)
-            elif args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
-                if args.backend == "fido2":
+            elif args.backend in (
+                "yubikey",
+                "tpm2-totp",
+                "keychain",
+                "dpapi",
+                "fido2",
+                "bitwarden",
+            ):
+                if args.backend == "bitwarden":
+                    from .backends import bitwarden
+
+                    rows = bitwarden.bitwarden_records(env)
+                    selected_id = launch_picker(rows, env, launcher=args.launcher)
+                    code = bitwarden.bitwarden_code(selected_id, env)
+                elif args.backend == "fido2":
                     from .backends import fido2
 
                     rows = fido2.fido2_records(env)
@@ -781,6 +818,23 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                                 break
                     except ValueError:
                         pass
+            elif args.backend == "bitwarden":
+                from .backends import bitwarden
+
+                item_name = args.item or args.account
+                if not item_name:
+                    raise AppError(2)
+                items = bitwarden.list_items(env)
+                for itm in items:
+                    if itm.get("id") == item_name or itm.get("name") == item_name:
+                        totp_raw = itm.get("login", {}).get("totp")
+                        if totp_raw:
+                            uri = (
+                                totp_raw
+                                if totp_raw.startswith("otpauth://")
+                                else f"otpauth://totp/{itm.get('name')}?secret={totp_raw}"
+                            )
+                            break
             if not uri:
                 raise AppError(4)
 
@@ -889,10 +943,21 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
         env = dict(os.environ)
         if copying:
             clipboard_capability(env)
-        if args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
+        if args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2", "bitwarden"):
             from .interaction import choose_records
 
-            if args.backend == "fido2":
+            if args.backend == "bitwarden":
+                from .backends import bitwarden
+
+                if args.command == "select":
+                    selected = choose_records(bitwarden.bitwarden_records(env), env)
+                    code = bitwarden.bitwarden_code(selected, env)
+                else:
+                    item_id_or_name = getattr(args, "item", None) or args.account
+                    if not item_id_or_name:
+                        raise AppError(2)
+                    code = bitwarden.bitwarden_code(item_id_or_name, env)
+            elif args.backend == "fido2":
                 from .backends import fido2
 
                 if args.command == "select":

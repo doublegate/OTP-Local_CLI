@@ -43,7 +43,7 @@ def _file(info: os.stat_result, incoming: int) -> None:
 
 def record(backend: str, home: Path | None = None) -> None:
     """Synchronously audit one confirmed local deletion attempt; errors forbid deletion."""
-    if backend not in ("pass-otp", "totpm", "keychain", "dpapi", "fido2"):
+    if backend not in ("pass-otp", "totpm", "keychain", "dpapi", "fido2", "bitwarden"):
         raise AppError(2)
     try:
         root = Path.home() if home is None else Path(home)
