@@ -381,6 +381,15 @@ class TestTuiActions(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
             self.assertEqual(app.current_backend, "keychain")
             self.assertIsInstance(app.screen, DashboardScreen)
+
+            # Press 'b' and '7' to choose dpapi
+            await pilot.press("b")
+            await pilot.pause()
+            self.assertIsInstance(app.screen, BackendSelectModal)
+            await pilot.press("7")
+            await pilot.pause()
+            self.assertEqual(app.current_backend, "dpapi")
+            self.assertIsInstance(app.screen, DashboardScreen)
             await pilot.press("q")
 
     async def test_auxiliary_help_modal(self) -> None:

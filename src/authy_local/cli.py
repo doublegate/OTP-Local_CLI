@@ -92,7 +92,15 @@ def parser() -> Parser:
     for command in (show, copy, select, enroll, pick, import_cmd, export_cmd, audit_cmd, qr_cmd):
         command.add_argument(
             "--backend",
-            choices=("onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp", "keychain"),
+            choices=(
+                "onepassword",
+                "pass-otp",
+                "totpm",
+                "yubikey",
+                "tpm2-totp",
+                "keychain",
+                "dpapi",
+            ),
             default="onepassword",
         )
         for flag in ("account", "vault", "store", "key-home", "entry", "config", "service"):
@@ -180,7 +188,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             return 0
         if args.command == "tui":
             if (
-                sys.platform not in ("linux", "darwin")
+                sys.platform not in ("linux", "darwin", "win32")
                 or sys.version_info[:2] != (3, 14)
                 or not has_terminal(stdin)
                 or not stdout.isatty()
@@ -207,7 +215,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             if not args.apply:
                 raise AppError(2)
             if (
-                sys.platform not in ("linux", "darwin")
+                sys.platform not in ("linux", "darwin", "win32")
                 or sys.version_info[:2] != (3, 14)
                 or not has_terminal(stdin)
             ):
@@ -297,6 +305,28 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                     finally:
                         confirmation = ""
                 keychain.keychain_enroll(args.account, secret, env)
+            elif args.backend == "dpapi":
+                from .backends import dpapi
+
+                if not args.account:
+                    raise AppError(2)
+                if not secret:
+                    import warnings
+                    from getpass import GetPassWarning, getpass
+
+                    confirmation = ""
+                    try:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("error", GetPassWarning)
+                            secret = getpass("Base32 enrollment secret (hidden): ")
+                            confirmation = getpass("Repeat enrollment value (hidden): ")
+                        if secret != confirmation:
+                            raise AppError(2)
+                    except GetPassWarning:
+                        raise AppError(3) from None
+                    finally:
+                        confirmation = ""
+                dpapi.dpapi_enroll(args.account, secret, env)
             else:
                 from .backends import local
 
@@ -331,7 +361,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             notice(stderr, "Enrollment completed. Verify a fresh login and recovery privately.")
             return 0
         if args.command == "pick":
-            if sys.platform not in ("linux", "darwin") or sys.version_info[:2] != (3, 14):
+            if sys.platform not in ("linux", "darwin", "win32") or sys.version_info[:2] != (3, 14):
                 raise AppError(3)
             env = dict(os.environ)
 
@@ -358,14 +388,28 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 selected_id = launch_picker(rows, env, launcher=args.launcher)
                 scope = Scope(selected_id, account, vault)
                 code = retrieve(scope, env)
-            elif args.backend in ("yubikey", "tpm2-totp"):
-                from .backends import hardware
+            elif args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
+                if args.backend == "dpapi":
+                    from .backends import dpapi
 
-                if args.backend == "yubikey":
+                    rows = dpapi.dpapi_records(env)
+                    selected_id = launch_picker(rows, env, launcher=args.launcher)
+                    code = dpapi.dpapi_code(selected_id, env)
+                elif args.backend == "keychain":
+                    from .backends import keychain
+
+                    rows = keychain.keychain_records(env)
+                    selected_id = launch_picker(rows, env, launcher=args.launcher)
+                    code = keychain.keychain_code(selected_id, env)
+                elif args.backend == "yubikey":
+                    from .backends import hardware
+
                     rows = hardware.yubikey_records(env)
                     selected_id = launch_picker(rows, env, launcher=args.launcher)
                     code = hardware.yubikey_code(selected_id, env)
                 else:
+                    from .backends import hardware
+
                     rows = hardware.tpm2_totp_records(env)
                     selected_id = launch_picker(rows, env, launcher=args.launcher)
                     code = hardware.tpm2_totp_code(selected_id, env)
@@ -411,7 +455,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 notify_desktop("Authy Local", "OTP copied to clipboard (clears in 45s)", env)
             return 0
         if args.command == "import":
-            if sys.platform not in ("linux", "darwin") or sys.version_info[:2] != (3, 14):
+            if sys.platform not in ("linux", "darwin", "win32") or sys.version_info[:2] != (3, 14):
                 raise AppError(3)
             env = dict(os.environ)
 
@@ -681,7 +725,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             stdout.flush()
             return 0
         if args.command == "agent":
-            if sys.platform not in ("linux", "darwin") or sys.version_info[:2] != (3, 14):
+            if sys.platform not in ("linux", "darwin", "win32") or sys.version_info[:2] != (3, 14):
                 raise AppError(3)
             from .agent import SessionAgent, send_agent_request
 
@@ -721,7 +765,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 return 0
         if args.command == "unlock":
             if (
-                sys.platform not in ("linux", "darwin")
+                sys.platform not in ("linux", "darwin", "win32")
                 or sys.version_info[:2] != (3, 14)
                 or not has_terminal(stdin)
             ):
@@ -742,7 +786,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 args.vault or "",
             )
 
-        if sys.platform not in ("linux", "darwin") or sys.version_info[:2] != (3, 14):
+        if sys.platform not in ("linux", "darwin", "win32") or sys.version_info[:2] != (3, 14):
             raise AppError(3)
 
         copying = args.command == "copy" or (args.command == "select" and args.copy)
@@ -753,10 +797,20 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
         env = dict(os.environ)
         if copying:
             clipboard_capability(env)
-        if args.backend in ("yubikey", "tpm2-totp", "keychain"):
+        if args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
             from .interaction import choose_records
 
-            if args.backend == "keychain":
+            if args.backend == "dpapi":
+                from .backends import dpapi
+
+                if args.command == "select":
+                    selected = choose_records(dpapi.dpapi_records(env), env)
+                    code = dpapi.dpapi_code(selected, env)
+                else:
+                    if not args.account:
+                        raise AppError(2)
+                    code = dpapi.dpapi_code(args.account, env)
+            elif args.backend == "keychain":
                 from .backends import keychain
 
                 if args.command == "select":

@@ -45,6 +45,10 @@ def records(backend: str, profile: dict[str, str], env: dict[str, str]) -> list[
         from .backends import keychain
 
         return keychain.keychain_records(env)
+    if backend == "dpapi":
+        from .backends import dpapi
+
+        return dpapi.dpapi_records(env)
     return local.records(_local_scope(backend, profile), env)
 
 
@@ -56,7 +60,7 @@ def arguments(backend: str, profile: dict[str, str], key: str) -> list[str]:
         account, vault = _values(profile, ("account", "vault"))
         Scope(key, account, vault)
         return [key, "--account", account, "--vault", vault]
-    if backend in ("yubikey", "tpm2-totp", "keychain"):
+    if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
         return ["--backend", backend, "--account", key]
     scope = _local_scope(backend, profile)
     if backend == "pass-otp":
@@ -101,6 +105,13 @@ def remove(backend: str, profile: dict[str, str], key: str, env: dict[str, str])
 
         deletion_audit.record(backend, Path(env["HOME"]) if env.get("HOME") else None)
         keychain.keychain_delete(key, env)
+        return
+    if backend == "dpapi":
+        arguments(backend, profile, key)
+        from .backends import dpapi
+
+        deletion_audit.record(backend, Path(env["HOME"]) if env.get("HOME") else None)
+        dpapi.dpapi_delete(key, env)
         return
     if backend not in {"pass-otp", "totpm"}:
         raise AppError(2)

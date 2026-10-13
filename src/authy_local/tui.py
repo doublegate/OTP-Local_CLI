@@ -69,6 +69,7 @@ BACKENDS = (
     ("yubikey", "YubiKey OATH"),
     ("tpm2-totp", "TPM 2.0 TOTP"),
     ("keychain", "macOS Keychain"),
+    ("dpapi", "Windows DPAPI"),
 )
 PROFILE_FIELDS = {
     "onepassword": ("account", "vault"),
@@ -77,6 +78,7 @@ PROFILE_FIELDS = {
     "yubikey": (),
     "tpm2-totp": (),
     "keychain": (),
+    "dpapi": (),
 }
 HELP = (
     "Keyboard controls",
@@ -359,6 +361,9 @@ def execute(screen, args, dispatch, curses, preview=None):
             "tpm-device",
             "keychain",
             "secure-enclave",
+            "dpapi",
+            "credman",
+            "windows-hello",
             "qrencode",
             "pinentry",
             "gpg-agent",
@@ -541,6 +546,7 @@ def configure_scope(screen, curses, backend, profile):
         "yubikey": {},
         "tpm2-totp": {},
         "keychain": {},
+        "dpapi": {},
     }
     fields = scope_fields(backend)
     initial = [(profile or defaults[backend])[name] for name in PROFILE_FIELDS[backend]]
@@ -1149,6 +1155,9 @@ class DoctorModal(ModalScreen[None]):
                     "tpm-device",
                     "keychain",
                     "secure-enclave",
+                    "dpapi",
+                    "credman",
+                    "windows-hello",
                     "pbcopy",
                     "wl-copy",
                     "fish",
@@ -2732,7 +2741,7 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
                         max_length=1024,
                         id="scope-totpm-config",
                     )
-                elif self.backend in ("yubikey", "tpm2-totp", "keychain"):
+                elif self.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
                     yield Static(
                         "Hardware/System backend accesses token directly via secure interface."
                     )
@@ -2776,7 +2785,7 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
         elif self.backend == "totpm":
             config = self.query_one("#scope-totpm-config", Input).value.strip()
             scope_dict = {"config": config}
-        elif self.backend in ("yubikey", "tpm2-totp", "keychain"):
+        elif self.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
             self.app.notify(f"Backend {self.backend} needs no saved file scope.")
             self.dismiss({})
             return
@@ -2812,6 +2821,7 @@ class BackendSelectModal(ModalScreen[str | None]):
         Binding("4", "select_4", "yubikey", show=False),
         Binding("5", "select_5", "tpm2-totp", show=False),
         Binding("6", "select_6", "keychain", show=False),
+        Binding("7", "select_7", "dpapi", show=False),
     ]
 
     def __init__(self, current_backend: str = "onepassword", **kwargs) -> None:
@@ -2828,6 +2838,7 @@ class BackendSelectModal(ModalScreen[str | None]):
                 Option("4  YubiKey OATH (yubikey)", id="opt-yubikey"),
                 Option("5  TPM 2.0 TOTP (tpm2-totp)", id="opt-tpm2-totp"),
                 Option("6  macOS Keychain (keychain)", id="opt-keychain"),
+                Option("7  Windows DPAPI (dpapi)", id="opt-dpapi"),
                 id="backend-select-list",
             )
             with Horizontal(id="backend-button-bar"):
@@ -2843,6 +2854,7 @@ class BackendSelectModal(ModalScreen[str | None]):
             "yubikey": 3,
             "tpm2-totp": 4,
             "keychain": 5,
+            "dpapi": 6,
         }
         opt_list.highlighted = mapping.get(self.current_backend, 0)
         opt_list.focus()
@@ -2865,19 +2877,38 @@ class BackendSelectModal(ModalScreen[str | None]):
     def action_select_6(self) -> None:
         self._choose("keychain")
 
+    def action_select_7(self) -> None:
+        self._choose("dpapi")
+
     def action_cancel_select(self) -> None:
         self.dismiss(None)
 
     @on(OptionList.OptionSelected, "#backend-select-list")
     def on_option_selected(self, event: OptionList.OptionSelected) -> None:
-        backends = ["onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp", "keychain"]
+        backends = [
+            "onepassword",
+            "pass-otp",
+            "totpm",
+            "yubikey",
+            "tpm2-totp",
+            "keychain",
+            "dpapi",
+        ]
         if event.option_index is not None and 0 <= event.option_index < len(backends):
             self._choose(backends[event.option_index])
 
     @on(Button.Pressed, "#btn-select-backend")
     def on_select_pressed(self) -> None:
         opt_list = self.query_one("#backend-select-list", OptionList)
-        backends = ["onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp", "keychain"]
+        backends = [
+            "onepassword",
+            "pass-otp",
+            "totpm",
+            "yubikey",
+            "tpm2-totp",
+            "keychain",
+            "dpapi",
+        ]
         if opt_list.highlighted is not None and 0 <= opt_list.highlighted < len(backends):
             self._choose(backends[opt_list.highlighted])
 
@@ -3248,6 +3279,11 @@ class AddOtpModal(ModalScreen[None]):
                         value=(self.current_backend == "keychain"),
                         id="chk-keychain",
                     )
+                    yield Checkbox(
+                        "Windows DPAPI",
+                        value=(self.current_backend == "dpapi"),
+                        id="chk-dpapi",
+                    )
 
                 yield Static("", id="add-otp-status-banner")
 
@@ -3448,8 +3484,9 @@ class AddOtpModal(ModalScreen[None]):
         save_pass = self.query_one("#chk-pass-otp", Checkbox).value
         save_tpm = self.query_one("#chk-totpm", Checkbox).value
         save_keychain = self.query_one("#chk-keychain", Checkbox).value
+        save_dpapi = self.query_one("#chk-dpapi", Checkbox).value
 
-        if not any((save_op, save_pass, save_tpm, save_keychain)):
+        if not any((save_op, save_pass, save_tpm, save_keychain, save_dpapi)):
             self._set_status("[red]Error: Select at least one target backend storage.[/]")
             return
 
@@ -3568,6 +3605,23 @@ class AddOtpModal(ModalScreen[None]):
                     enrolled.append("macOS Keychain")
                 except Exception as exc:
                     errors.append(f"macOS Keychain: {exc}")
+
+            # 5. Windows DPAPI
+            if save_dpapi:
+                try:
+                    from .backends import dpapi
+
+                    raw_acc = account or issuer or "default"
+                    acc_name = (
+                        re.sub(r"[^A-Za-z0-9_.-]+", "_", raw_acc).strip("._-")[:64] or "default"
+                    )
+                    if not re.match(r"[A-Za-z0-9]", acc_name):
+                        acc_name = f"user_{acc_name}"[:64]
+
+                    await asyncio.to_thread(dpapi.dpapi_enroll, acc_name, params.secret, env)
+                    enrolled.append("Windows DPAPI")
+                except Exception as exc:
+                    errors.append(f"Windows DPAPI: {exc}")
 
             if errors:
                 err_text = "; ".join(errors)
