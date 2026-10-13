@@ -68,6 +68,7 @@ BACKENDS = (
     ("totpm", "totpm / TPM"),
     ("yubikey", "YubiKey OATH"),
     ("tpm2-totp", "TPM 2.0 TOTP"),
+    ("keychain", "macOS Keychain"),
 )
 PROFILE_FIELDS = {
     "onepassword": ("account", "vault"),
@@ -75,6 +76,7 @@ PROFILE_FIELDS = {
     "totpm": ("config",),
     "yubikey": (),
     "tpm2-totp": (),
+    "keychain": (),
 }
 HELP = (
     "Keyboard controls",
@@ -345,28 +347,49 @@ def execute(screen, args, dispatch, curses, preview=None):
             "fish",
             "fzf",
             "wl-copy",
+            "pbcopy",
             "clock",
             "authentication",
             "pass",
             "gpg",
             "oathtool",
             "totpm",
+            "yubikey",
+            "tpm2-totp",
             "tpm-device",
+            "keychain",
+            "secure-enclave",
+            "qrencode",
+            "pinentry",
+            "gpg-agent",
         }
         states = {}
         for line in output.getvalue().splitlines():
             name, separator, state = line.partition(": ")
-            if separator and name in names and state in {"available", "missing", "unknown"}:
+            if (
+                separator
+                and name in names
+                and state
+                in {
+                    "available",
+                    "missing",
+                    "unknown",
+                    "not-applicable",
+                }
+            ):
                 states[name] = state
-        lines = [f"{name}: {state}" for name, state in states.items()]
+        lines = [f"{name}: {state}" for name, state in states.items() if state != "not-applicable"]
         if status or not lines:
             status = status or 5
             lines.append(MESSAGES.get(status, MESSAGES[3]))
             summary = f"Doctor failed (exit {status}); press 1 to retry"
         else:
+            summary_states = ["available", "missing", "unknown"]
+            if any(value == "not-applicable" for value in states.values()):
+                summary_states.append("not-applicable")
             summary = "Doctor: " + ", ".join(
                 f"{sum(value == state for value in states.values())} {state}"
-                for state in ("available", "missing", "unknown")
+                for state in summary_states
             )
     elif status:
         lines = [MESSAGES.get(status, MESSAGES[3])]
@@ -517,6 +540,7 @@ def configure_scope(screen, curses, backend, profile):
         "totpm": {"config": str(Path.home() / ".config/authy-local/totpm.conf")},
         "yubikey": {},
         "tpm2-totp": {},
+        "keychain": {},
     }
     fields = scope_fields(backend)
     initial = [(profile or defaults[backend])[name] for name in PROFILE_FIELDS[backend]]
@@ -584,7 +608,9 @@ def scope_form(screen, curses, backend, selection, profile=None):
                 "--key-home",
                 scope["key_home"],
             ]
-        return ["--backend", backend, "--config", scope["config"]]
+        if backend == "totpm":
+            return ["--backend", backend, "--config", scope["config"]]
+        return ["--backend", backend]
     chosen = values[base_count:]
     key = ":".join(chosen) if backend == "totpm" else chosen[0]
     return arguments(backend, scope, key)
@@ -1118,10 +1144,18 @@ class DoctorModal(ModalScreen[None]):
                     "gpg",
                     "oathtool",
                     "totpm",
+                    "yubikey",
+                    "tpm2-totp",
                     "tpm-device",
+                    "keychain",
+                    "secure-enclave",
+                    "pbcopy",
                     "wl-copy",
                     "fish",
                     "fzf",
+                    "qrencode",
+                    "pinentry",
+                    "gpg-agent",
                 ):
                     state = self.states.get(name, "unknown")
                     if state == "available":
@@ -1130,6 +1164,9 @@ class DoctorModal(ModalScreen[None]):
                     elif state == "missing":
                         badge_text = "[red]✖ MISSING[/]"
                         badge_class = "badge-missing"
+                    elif state == "not-applicable":
+                        badge_text = "[dim cyan]— N/A[/]"
+                        badge_class = "badge-not-applicable"
                     else:
                         badge_text = "[yellow]▲ UNKNOWN[/]"
                         badge_class = "badge-unknown"
@@ -1156,7 +1193,7 @@ class DoctorModal(ModalScreen[None]):
         self.states = {}
         for line in lines:
             name, sep, state = line.partition(": ")
-            if sep and state in {"available", "missing", "unknown"}:
+            if sep and state in {"available", "missing", "unknown", "not-applicable"}:
                 self.states[name] = state
         try:
             banner = self.query_one("#doctor-status-banner", Static)
@@ -1171,13 +1208,21 @@ class DoctorModal(ModalScreen[None]):
             for name, state in self.states.items():
                 try:
                     badge = self.query_one(f"#badge-{name}", Static)
-                    badge.remove_class("badge-available", "badge-missing", "badge-unknown")
+                    badge.remove_class(
+                        "badge-available",
+                        "badge-missing",
+                        "badge-unknown",
+                        "badge-not-applicable",
+                    )
                     if state == "available":
                         badge.update("[green]● AVAILABLE[/]")
                         badge.add_class("badge-available")
                     elif state == "missing":
                         badge.update("[red]✖ MISSING[/]")
                         badge.add_class("badge-missing")
+                    elif state == "not-applicable":
+                        badge.update("[dim cyan]— N/A[/]")
+                        badge.add_class("badge-not-applicable")
                     else:
                         badge.update("[yellow]▲ UNKNOWN[/]")
                         badge.add_class("badge-unknown")
@@ -2687,8 +2732,10 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
                         max_length=1024,
                         id="scope-totpm-config",
                     )
-                elif self.backend in ("yubikey", "tpm2-totp"):
-                    yield Static("Hardware backend accesses token directly via device interface.")
+                elif self.backend in ("yubikey", "tpm2-totp", "keychain"):
+                    yield Static(
+                        "Hardware/System backend accesses token directly via secure interface."
+                    )
                     yield Static("No scope configuration file or path parameters required.")
             yield Static("", id="scope-error-banner")
             with Horizontal(id="scope-actions"):
@@ -2729,8 +2776,8 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
         elif self.backend == "totpm":
             config = self.query_one("#scope-totpm-config", Input).value.strip()
             scope_dict = {"config": config}
-        elif self.backend in ("yubikey", "tpm2-totp"):
-            self.app.notify(f"Hardware backend {self.backend} needs no saved file scope.")
+        elif self.backend in ("yubikey", "tpm2-totp", "keychain"):
+            self.app.notify(f"Backend {self.backend} needs no saved file scope.")
             self.dismiss({})
             return
 
@@ -2764,6 +2811,7 @@ class BackendSelectModal(ModalScreen[str | None]):
         Binding("3", "select_3", "totpm", show=False),
         Binding("4", "select_4", "yubikey", show=False),
         Binding("5", "select_5", "tpm2-totp", show=False),
+        Binding("6", "select_6", "keychain", show=False),
     ]
 
     def __init__(self, current_backend: str = "onepassword", **kwargs) -> None:
@@ -2779,6 +2827,7 @@ class BackendSelectModal(ModalScreen[str | None]):
                 Option("3  totpm / TPM (totpm)", id="opt-totpm"),
                 Option("4  YubiKey OATH (yubikey)", id="opt-yubikey"),
                 Option("5  TPM 2.0 TOTP (tpm2-totp)", id="opt-tpm2-totp"),
+                Option("6  macOS Keychain (keychain)", id="opt-keychain"),
                 id="backend-select-list",
             )
             with Horizontal(id="backend-button-bar"):
@@ -2787,7 +2836,14 @@ class BackendSelectModal(ModalScreen[str | None]):
 
     def on_mount(self) -> None:
         opt_list = self.query_one("#backend-select-list", OptionList)
-        mapping = {"onepassword": 0, "pass-otp": 1, "totpm": 2, "yubikey": 3, "tpm2-totp": 4}
+        mapping = {
+            "onepassword": 0,
+            "pass-otp": 1,
+            "totpm": 2,
+            "yubikey": 3,
+            "tpm2-totp": 4,
+            "keychain": 5,
+        }
         opt_list.highlighted = mapping.get(self.current_backend, 0)
         opt_list.focus()
 
@@ -2806,19 +2862,22 @@ class BackendSelectModal(ModalScreen[str | None]):
     def action_select_5(self) -> None:
         self._choose("tpm2-totp")
 
+    def action_select_6(self) -> None:
+        self._choose("keychain")
+
     def action_cancel_select(self) -> None:
         self.dismiss(None)
 
     @on(OptionList.OptionSelected, "#backend-select-list")
     def on_option_selected(self, event: OptionList.OptionSelected) -> None:
-        backends = ["onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp"]
+        backends = ["onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp", "keychain"]
         if event.option_index is not None and 0 <= event.option_index < len(backends):
             self._choose(backends[event.option_index])
 
     @on(Button.Pressed, "#btn-select-backend")
     def on_select_pressed(self) -> None:
         opt_list = self.query_one("#backend-select-list", OptionList)
-        backends = ["onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp"]
+        backends = ["onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp", "keychain"]
         if opt_list.highlighted is not None and 0 <= opt_list.highlighted < len(backends):
             self._choose(backends[opt_list.highlighted])
 
@@ -3184,6 +3243,11 @@ class AddOtpModal(ModalScreen[None]):
                         value=(self.current_backend == "totpm"),
                         id="chk-totpm",
                     )
+                    yield Checkbox(
+                        "macOS Keychain",
+                        value=(self.current_backend == "keychain"),
+                        id="chk-keychain",
+                    )
 
                 yield Static("", id="add-otp-status-banner")
 
@@ -3383,8 +3447,9 @@ class AddOtpModal(ModalScreen[None]):
         save_op = self.query_one("#chk-onepassword", Checkbox).value
         save_pass = self.query_one("#chk-pass-otp", Checkbox).value
         save_tpm = self.query_one("#chk-totpm", Checkbox).value
+        save_keychain = self.query_one("#chk-keychain", Checkbox).value
 
-        if not any((save_op, save_pass, save_tpm)):
+        if not any((save_op, save_pass, save_tpm, save_keychain)):
             self._set_status("[red]Error: Select at least one target backend storage.[/]")
             return
 
@@ -3486,6 +3551,23 @@ class AddOtpModal(ModalScreen[None]):
                         enrolled.append("totpm")
                     except Exception as exc:
                         errors.append(f"totpm: {exc}")
+
+            # 4. macOS Keychain
+            if save_keychain:
+                try:
+                    from .backends import keychain
+
+                    raw_acc = account or issuer or "default"
+                    acc_name = (
+                        re.sub(r"[^A-Za-z0-9_.-]+", "_", raw_acc).strip("._-")[:64] or "default"
+                    )
+                    if not re.match(r"[A-Za-z0-9]", acc_name):
+                        acc_name = f"user_{acc_name}"[:64]
+
+                    await asyncio.to_thread(keychain.keychain_enroll, acc_name, params.secret, env)
+                    enrolled.append("macOS Keychain")
+                except Exception as exc:
+                    errors.append(f"macOS Keychain: {exc}")
 
             if errors:
                 err_text = "; ".join(errors)
@@ -3888,6 +3970,10 @@ class AuthyApp(App):
 
     .badge-unknown {
         color: yellow;
+    }
+
+    .badge-not-applicable {
+        color: cyan;
     }
 
     #doctor-actions {
@@ -4921,7 +5007,7 @@ class AuthyApp(App):
         states = {}
         for line in lines:
             name, sep, state = line.partition(": ")
-            if sep and state in {"available", "missing", "unknown"}:
+            if sep and state in {"available", "missing", "unknown", "not-applicable"}:
                 states[name] = state
         if self._can_open_dialog():
             self.push_screen(DoctorModal(states=states, summary=summary or "", status=status))
@@ -5142,18 +5228,36 @@ class AuthyApp(App):
                 "fish",
                 "fzf",
                 "wl-copy",
+                "pbcopy",
                 "clock",
                 "authentication",
                 "pass",
                 "gpg",
                 "oathtool",
                 "totpm",
+                "yubikey",
+                "tpm2-totp",
                 "tpm-device",
+                "keychain",
+                "secure-enclave",
+                "qrencode",
+                "pinentry",
+                "gpg-agent",
             }
             states = {}
             for line in output.getvalue().splitlines():
                 name, separator, state = line.partition(": ")
-                if separator and name in names and state in {"available", "missing", "unknown"}:
+                if (
+                    separator
+                    and name in names
+                    and state
+                    in {
+                        "available",
+                        "missing",
+                        "unknown",
+                        "not-applicable",
+                    }
+                ):
                     states[name] = state
             lines = [f"{name}: {state}" for name, state in states.items()]
             if status or not lines:
@@ -5161,9 +5265,12 @@ class AuthyApp(App):
                 lines.append(MESSAGES.get(status, MESSAGES[3]))
                 summary = f"Doctor failed (exit {status}); press 1 to retry"
             else:
+                summary_states = ["available", "missing", "unknown"]
+                if any(value == "not-applicable" for value in states.values()):
+                    summary_states.append("not-applicable")
                 summary = "Doctor: " + ", ".join(
                     f"{sum(value == state for value in states.values())} {state}"
-                    for state in ("available", "missing", "unknown")
+                    for state in summary_states
                 )
         elif status:
             lines = [MESSAGES.get(status, MESSAGES[3])]

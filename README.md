@@ -9,7 +9,7 @@
 
 ![OTP-Local CLI Banner](assets/banner.svg)
 
-Local terminal companion, migration engine, and security layer for accessing two-factor authentication (TOTP/HOTP) tokens across 1Password, local GPG `pass-otp`, hardware TPM 2.0 enclaves, and YubiKeys.
+Local terminal companion, migration engine, and security layer for accessing two-factor authentication (TOTP/HOTP) tokens across 1Password, local GPG `pass-otp`, Apple Secure Enclave & macOS Keychain, hardware TPM 2.0 enclaves, and YubiKeys.
 
 Designed for security engineers, operators, and developers who require instant, secure, and auditable OTP access in their local shell environment without persistent disk seed storage or vendor cloud lock-in.
 
@@ -45,6 +45,7 @@ flowchart TD
     subgraph Backends ["Hardware & Cryptographic Backends"]
         OP["1Password CLI (op)"]
         PASS["pass-otp (GPG Keyring)"]
+        KEYCHAIN["macOS Keychain (Secure Enclave)"]
         TPM["totpm (TPM 2.0 Enclave)"]
         YUBI["YubiKey (oathtool / PCSC)"]
     end
@@ -56,6 +57,7 @@ flowchart TD
     DISPATCH --> AGENT
     AGENT --> OP
     AGENT --> PASS
+    AGENT --> KEYCHAIN
     AGENT --> TPM
     AGENT --> YUBI
 
@@ -109,6 +111,7 @@ Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all ex
 | --- | --- | --- | --- | --- |
 | **In-Process RFC 6238** | **0.04 ms** | < 12 KB (ephemeral) | None (in-memory) | Process isolation |
 | **Session Agent IPC (UDS)** | **0.85 ms** | < 1.2 MB RSS | None (socket) | Mode 0600 socket |
+| **macOS Keychain (Secure Enclave)** | **8.4 ms** | System security service | Sealed to SEP / T2 | Apple Hardware Security |
 | **Hardware TPM 2.0 (`totpm`)** | **12.1 ms** | External hardware | Sealed to PCRs | Silicon hardware |
 | **GPG `pass-otp`** | **18.5 ms** | `gpg-agent` memory | GPG encrypted files | Private GPG key |
 | **1Password CLI (`op`)** | **285 ms** | App IPC boundary | Encrypted SQLite | Biometric / App unlock |
@@ -117,13 +120,13 @@ Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all ex
 
 ## Features
 
-- **Multi-Backend Architecture**: Seamlessly query or switch between 1Password, `pass-otp`, TPM 2.0 (`totpm`), and YubiKey.
+- **Multi-Backend Architecture**: Seamlessly query or switch between 1Password, `pass-otp`, macOS Keychain (Apple Secure Enclave), TPM 2.0 (`totpm`), and YubiKey.
 - **Modern Textual TUI**: Interactive full-screen terminal interface with live visual countdown progress bars, profile switching, item detail inspector, and searchable token tables.
 - **Fail-Closed Security**: File modes enforced at 0600, parent directories at 0700, and zero sensitive state in process memory or error stack traces.
 - **Ephemeral Session Daemon**: Background systemd user service and socket activation (`authy-local-agent.service`) with configurable idle auto-lock (default: 900 seconds).
 - **Clipboard Scrubber**: High-reliability clipboard scrubber supporting Wayland (`wl-copy`), X11 (`xclip`), and macOS (`pbcopy`) with automatic 30-second memory wipes.
 - **Terminal QR Rendering**: Inspect or cross-enroll tokens via high-contrast UTF-8/ANSI terminal QR codes directly inside the CLI or TUI (`otp-local qr <account>`).
-- **Comprehensive Doctor**: Non-authenticating diagnostic tool (`otp-local doctor`) evaluating platform tools, system clock synchronization, GPG agents, TPM devices, and IPC health.
+- **Comprehensive Doctor**: Non-authenticating diagnostic tool (`otp-local doctor`) evaluating platform tools, system clock synchronization, GPG agents, Secure Enclave, macOS Keychain, TPM devices, and IPC health. On Apple hardware, Linux-specific PC TPM 2.0 components are accurately detected and marked as `not-applicable`.
 - **Security Auditor**: Detect identical shared secrets, short seed lengths, or unhardened digest parameters (`otp-local audit`).
 - **Standardized Importers/Exporters**: Import or export tokens to standard formats (Aegis JSON, 2FAS, Bitwarden, Google Authenticator URI) with optional GPG recipient encryption.
 
@@ -217,6 +220,7 @@ The following table contrasts `OTP-Local CLI` against mainstream open-source CLI
 | **Storage Architecture** | **Zero-Disk-Storage** (RAM only) | Cloud Vault + Local Cache | Encrypted GPG Files | Encrypted SQLite / File | Encrypted Phone Backup | Hardware Key Chip | None (Stateless argv) | Cloud Database |
 | **Interactive Dashboard** | **Yes** (live bars, hotkeys) | No | No (3rd party UIs) | No | Yes (Fuzzy finder) | No | No | Yes (GUI only) |
 | **1Password Integration** | **Native** (`op` backend) | Native | No | No | No | No | No | No |
+| **Apple Secure Enclave** | **Native** (macOS Keychain) | No | No | No | No | No | No | No |
 | **Hardware TPM2 Support** | **Native** (PCR enclaves) | No | No | No | No | No | No | No |
 | **YubiKey OATH Support** | **Native** (`ykman` bridge) | No | Via GPG smartcard | No | No | Native | No | No |
 | **pass-otp / totpm Store** | **Native** | No | Native | No | No | No | No | No |
@@ -228,11 +232,12 @@ The following table contrasts `OTP-Local CLI` against mainstream open-source CLI
 
 ### Detailed Architectural Distinctions
 
-- **Compared to 1Password CLI (`op`)**: While `op` requires terminal operators to invoke individual subcommands and pipe output through shell utilities, `OTP-Local CLI` wraps `op` in a high-speed Textual dashboard with real-time countdown progress bars, live fuzzy filtering, and clipboard auto-wiping, while also allowing unified fallback to hardware TPM2 or local GPG stores without credential duplication.
+- **Compared to 1Password CLI (`op`)**: While `op` requires terminal operators to invoke individual subcommands and pipe output through shell utilities, `OTP-Local CLI` wraps `op` in a high-speed Textual dashboard with real-time countdown progress bars, live fuzzy filtering, and clipboard auto-wiping, while also allowing unified fallback to hardware TPM2, Apple Secure Enclave, or local GPG stores without credential duplication.
 - **Compared to `pass-otp`**: Standard `pass-otp` is tightly tied to the ZX2C4 password store on disk and lacks a unified multi-enclave model or a modern terminal UI. `OTP-Local CLI` can inspect and audit `pass-otp` stores while providing interactive TUI navigation and multi-backend switching.
+- **Compared to Apple Keychain / Touch ID wrappers**: Native Apple Keychain CLI tools lack RFC 6238 countdown timers, live clipboard scrubbers, multi-backend portability, and cross-platform consistency. `OTP-Local CLI` harnesses `/usr/bin/security` sealed with Apple Silicon SEP or T2 chip hardware Data Protection while allowing instant switching between macOS Keychain, YubiKeys, and 1Password.
 - **Compared to `totp-cli` and `termotp`**: Tools like `totp-cli` maintain an on-disk encrypted database requiring a master password, whereas `OTP-Local CLI` enforces strict zero-disk-storage where secrets remain confined to hardware enclaves or existing authenticated vaults. `termotp` relies on static mobile exports (Aegis), whereas `OTP-Local CLI` interfaces with live system enclaves and password engines.
 - **Compared to `oathtool`**: `oathtool` requires passing raw base32 secrets via command-line arguments, which exposes unencrypted keys in the system process table (`/proc/PID/cmdline`) and shell histories (`~/.bash_history`). `OTP-Local CLI` passes secrets via secure stdin pipes, subreaper process trees, and memory-locked buffers.
-- **Compared to `ykman oath`**: YubiKey Manager is limited strictly to physical YubiKey hardware tokens. `OTP-Local CLI` bridges YubiKey hardware, TPM 2.0 chips, 1Password, and local encrypted stores under a single, unified interface and uniform keybindings.
+- **Compared to `ykman oath`**: YubiKey Manager is limited strictly to physical YubiKey hardware tokens. `OTP-Local CLI` bridges YubiKey hardware, Apple Secure Enclave, TPM 2.0 chips, 1Password, and local encrypted stores under a single, unified interface and uniform keybindings.
 - **Compared to Legacy Twilio Authy Desktop**: Following Twilio's formal discontinuation of Authy Desktop in August 2024, `OTP-Local CLI` provides a completely offline, zero-telemetry, developer-friendly terminal companion that liberates users from proprietary cloud lock-in.
 
 ---
@@ -258,7 +263,7 @@ Hotkeys:
 - `Enter`: Copy currently focused OTP code to clipboard (arms 30s auto-wiper).
 - `v`: View account metadata and parameters modal.
 - `q`: Render high-resolution terminal QR code.
-- `b`: Switch active backend (1Password, pass-otp, TPM2, YubiKey).
+- `b`: Switch active backend (1Password, pass-otp, macOS Keychain, TPM2, YubiKey).
 - `/` or `f`: Instant fuzzy filter across accounts and issuers.
 - `d`: Run doctor capability assessment panel.
 - `Esc` / `Ctrl+C`: Gracefully exit and wipe in-memory secrets.

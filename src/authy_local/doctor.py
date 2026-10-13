@@ -86,6 +86,20 @@ def report(env: dict[str, str]) -> dict:
             result["tpm-device"] = {"state": "unknown"}
     else:
         result["tpm-device"] = {"state": "missing"}
+
+    from .backends import keychain
+
+    if sys.platform == "darwin":
+        result["keychain"] = keychain.probe(env)
+        result["secure-enclave"] = {
+            "state": "available" if keychain.has_secure_enclave() else "missing"
+        }
+        result["totpm"] = {"state": "not-applicable"}
+        result["tpm2-totp"] = {"state": "not-applicable"}
+        result["tpm-device"] = {"state": "not-applicable"}
+    else:
+        result["keychain"] = {"state": "not-applicable"}
+        result["secure-enclave"] = {"state": "not-applicable"}
     clock = shutil.which("timedatectl", path=env.get("PATH", ""))
     if clock:
         try:
@@ -166,17 +180,26 @@ def install_missing(env: dict[str, str], *, stdout=None, stderr=None) -> bool:
                 proc = run(
                     [brew, "install", *packages_to_install],
                     env=child_environment(env),
-                    timeout=300,
+                    timeout=900,
+                    stdout_cap=10 * 1024 * 1024,
+                    stderr_cap=10 * 1024 * 1024,
                     preserve_session=True,
                 )
+                if isinstance(getattr(proc, "stdout", None), (bytes, bytearray)):
+                    out.write(proc.stdout.decode("utf-8", errors="replace"))
                 if proc.returncode == 0:
                     out.write("Successfully installed missing Homebrew packages.\n\n")
                     return True
                 else:
                     err.write("Homebrew installation returned a non-zero exit code.\n\n")
                     return False
-            except AppError:
-                err.write("Installation timed out or was interrupted.\n\n")
+            except AppError as error:
+                if error.exit_code == 7:
+                    err.write("Installation timed out after 15 minutes.\n\n")
+                elif error.exit_code == 130:
+                    err.write("Installation was interrupted by user.\n\n")
+                else:
+                    err.write("Installation encountered an unexpected execution error.\n\n")
                 return False
         else:
             out.write("No installable software packages are missing.\n\n")

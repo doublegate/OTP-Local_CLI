@@ -41,6 +41,8 @@ class TestTuiActions(unittest.IsolatedAsyncioTestCase):
             output.write("op: available\n")
             output.write("wl-copy: missing\n")
             output.write("clock: unknown\n")
+            output.write("totpm: not-applicable\n")
+            output.write("keychain: available\n")
             return 0
 
         app = AuthyApp(dispatch=doctor_dispatch, profiles=self.valid_profile)
@@ -59,6 +61,12 @@ class TestTuiActions(unittest.IsolatedAsyncioTestCase):
 
             badge_clock = modal.query_one("#badge-clock", Static)
             self.assertIn("UNKNOWN", str(badge_clock.render()))
+
+            badge_totpm = modal.query_one("#badge-totpm", Static)
+            self.assertIn("N/A", str(badge_totpm.render()))
+
+            badge_keychain = modal.query_one("#badge-keychain", Static)
+            self.assertIn("AVAILABLE", str(badge_keychain.render()))
 
             with patch("authy_local.interaction.copy_code") as mock_copy:
                 await pilot.press("c")
@@ -363,6 +371,15 @@ class TestTuiActions(unittest.IsolatedAsyncioTestCase):
             await pilot.press("3")
             await pilot.pause()
             self.assertEqual(app.current_backend, "totpm")
+            self.assertIsInstance(app.screen, DashboardScreen)
+
+            # Press 'b' and '6' to choose keychain
+            await pilot.press("b")
+            await pilot.pause()
+            self.assertIsInstance(app.screen, BackendSelectModal)
+            await pilot.press("6")
+            await pilot.pause()
+            self.assertEqual(app.current_backend, "keychain")
             self.assertIsInstance(app.screen, DashboardScreen)
             await pilot.press("q")
 

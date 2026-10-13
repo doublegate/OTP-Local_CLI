@@ -92,7 +92,7 @@ def parser() -> Parser:
     for command in (show, copy, select, enroll, pick, import_cmd, export_cmd, audit_cmd, qr_cmd):
         command.add_argument(
             "--backend",
-            choices=("onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp"),
+            choices=("onepassword", "pass-otp", "totpm", "yubikey", "tpm2-totp", "keychain"),
             default="onepassword",
         )
         for flag in ("account", "vault", "store", "key-home", "entry", "config", "service"):
@@ -275,6 +275,28 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                     item_id=getattr(args, "item_id", None),
                     tags=getattr(args, "tags", "OTP"),
                 )
+            elif args.backend == "keychain":
+                from .backends import keychain
+
+                if not args.account:
+                    raise AppError(2)
+                if not secret:
+                    import warnings
+                    from getpass import GetPassWarning, getpass
+
+                    confirmation = ""
+                    try:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("error", GetPassWarning)
+                            secret = getpass("Base32 enrollment secret (hidden): ")
+                            confirmation = getpass("Repeat enrollment value (hidden): ")
+                        if secret != confirmation:
+                            raise AppError(2)
+                    except GetPassWarning:
+                        raise AppError(3) from None
+                    finally:
+                        confirmation = ""
+                keychain.keychain_enroll(args.account, secret, env)
             else:
                 from .backends import local
 
@@ -731,11 +753,22 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
         env = dict(os.environ)
         if copying:
             clipboard_capability(env)
-        if args.backend in ("yubikey", "tpm2-totp"):
-            from .backends import hardware
+        if args.backend in ("yubikey", "tpm2-totp", "keychain"):
             from .interaction import choose_records
 
-            if args.backend == "yubikey":
+            if args.backend == "keychain":
+                from .backends import keychain
+
+                if args.command == "select":
+                    selected = choose_records(keychain.keychain_records(env), env)
+                    code = keychain.keychain_code(selected, env)
+                else:
+                    if not args.account:
+                        raise AppError(2)
+                    code = keychain.keychain_code(args.account, env)
+            elif args.backend == "yubikey":
+                from .backends import hardware
+
                 if args.command == "select":
                     selected = choose_records(hardware.yubikey_records(env), env)
                     code = hardware.yubikey_code(selected, env)
@@ -744,6 +777,8 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                         raise AppError(2)
                     code = hardware.yubikey_code(args.account, env)
             else:
+                from .backends import hardware
+
                 if args.command == "select":
                     selected = choose_records(hardware.tpm2_totp_records(env), env)
                     code = hardware.tpm2_totp_code(selected, env)
