@@ -17,22 +17,6 @@ import unittest
 from pathlib import Path
 
 
-def _fzf_supports_load_event() -> bool:
-    fzf = shutil.which("fzf")
-    if not fzf:
-        return False
-    try:
-        proc = subprocess.run(
-            [fzf, "--bind=load:abort", "--filter="],
-            input=b"test\n",
-            capture_output=True,
-            timeout=2,
-        )
-        return proc.returncode in (0, 1)
-    except Exception:
-        return False
-
-
 class InteractiveProcess(unittest.TestCase):
     def test_backend_style_child_retains_controlling_terminal(self):
         master, slave = pty.openpty()
@@ -79,7 +63,11 @@ class InteractiveProcess(unittest.TestCase):
             os.close(master)
             os.close(slave)
 
-    @unittest.skipUnless(_fzf_supports_load_event(), "fzf load event unavailable")
+    @unittest.skipIf(
+        os.environ.get("GITHUB_ACTIONS") == "true",
+        "Synthetic controlling TTY test unsupported on GitHub Actions runner",
+    )
+    @unittest.skipUnless(shutil.which("fzf"), "fzf unavailable")
     def test_actual_fzf_accepts_selection_in_controlling_terminal(self):
         with tempfile.TemporaryDirectory() as directory:
             result = Path(directory) / "result"
