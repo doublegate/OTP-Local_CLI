@@ -125,6 +125,66 @@ def report(env: dict[str, str]) -> dict:
     return result
 
 
+BREW_CAPABILITY_MAP = {
+    "fish": "fish",
+    "pass": "pass",
+    "oathtool": "oath-toolkit",
+    "yubikey": "ykman",
+    "fzf": "fzf",
+    "qrencode": "qrencode",
+    "pinentry": "pinentry-mac",
+}
+
+
+def install_missing(env: dict[str, str], *, stdout=None, stderr=None) -> bool:
+    """Attempt automatic remediation of missing optional dependencies via system package manager."""
+    out = stdout if stdout is not None else sys.stdout
+    err = stderr if stderr is not None else sys.stderr
+
+    current = report(env)
+    missing = [k for k, v in current.items() if v.get("state") == "missing"]
+
+    if sys.platform == "darwin":
+        brew = shutil.which("brew", path=env.get("PATH", ""))
+        if not brew:
+            err.write(
+                "Automatic install requires Homebrew ('brew'). Install Homebrew from https://brew.sh\n"
+            )
+            return False
+
+        packages_to_install = []
+        for cap in missing:
+            formula = BREW_CAPABILITY_MAP.get(cap)
+            if formula and formula not in packages_to_install:
+                packages_to_install.append(formula)
+
+        if packages_to_install:
+            out.write(
+                f"Installing missing capabilities via Homebrew: {' '.join(packages_to_install)}...\n"
+            )
+            try:
+                proc = run(
+                    [brew, "install", *packages_to_install],
+                    env=child_environment(env),
+                    timeout=300,
+                    preserve_session=True,
+                )
+                if proc.returncode == 0:
+                    out.write("Successfully installed missing Homebrew packages.\n\n")
+                    return True
+                else:
+                    err.write("Homebrew installation returned a non-zero exit code.\n\n")
+                    return False
+            except AppError:
+                err.write("Installation timed out or was interrupted.\n\n")
+                return False
+        else:
+            out.write("No installable software packages are missing.\n\n")
+            return True
+
+    return True
+
+
 def status(result: dict) -> int:
     required = ("platform", "python", "op")
     if any(result[key]["state"] != "available" for key in required):

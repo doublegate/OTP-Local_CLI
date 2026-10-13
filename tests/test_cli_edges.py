@@ -248,6 +248,26 @@ class CliEdges(unittest.TestCase):
             status, report = self.inspect_doctor()
         self.assertEqual(report["platform"]["state"], "available")
 
+    def test_doctor_install_missing_darwin(self):
+        out, err = io.StringIO(), io.StringIO()
+        with (
+            patch.dict(os.environ, self.env, clear=True),
+            patch.object(doctor.sys, "platform", "darwin"),
+            patch(
+                "shutil.which",
+                side_effect=lambda name, path="": "/usr/local/bin/brew" if name == "brew" else None,
+            ),
+            patch(
+                "authy_local.doctor.run", return_value=unittest.mock.MagicMock(returncode=0)
+            ) as mock_run,
+        ):
+            cli.main(["doctor", "--install", "--json"], stdout=out, stderr=err)
+            self.assertIn("Installing missing capabilities via Homebrew", out.getvalue())
+            mock_run.assert_called_once()
+            cmd = mock_run.call_args[0][0]
+            self.assertEqual(cmd[0], "/usr/local/bin/brew")
+            self.assertEqual(cmd[1], "install")
+
     def test_doctor_rejects_unsupported_python(self):
         with patch.object(doctor.sys, "version_info", (3, 13, 0)):
             status, report = self.inspect_doctor()

@@ -37,6 +37,12 @@ def parser() -> Parser:
     commands = root.add_subparsers(dest="command", required=True, parser_class=Parser)
     inspect = commands.add_parser("doctor", allow_abbrev=False)
     inspect.add_argument("--json", action="store_true")
+    inspect.add_argument(
+        "--install",
+        "--fix",
+        action="store_true",
+        help="Automatically install missing capabilities using system package manager",
+    )
     commands.add_parser("tui", allow_abbrev=False)
     guide = commands.add_parser("guide", allow_abbrev=False)
     guide.add_argument(
@@ -158,6 +164,8 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
         with redirect_stdout(stdout), redirect_stderr(stderr):
             args = parser().parse_args(argv)
         if args.command == "doctor":
+            if getattr(args, "install", False):
+                doctor.install_missing(dict(os.environ), stdout=stdout, stderr=stderr)
             result = doctor.report(dict(os.environ))
             if args.json:
                 stdout.write(json.dumps(result, sort_keys=True) + "\n")
