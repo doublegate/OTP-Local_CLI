@@ -131,44 +131,79 @@ Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all ex
 
 ## Cross-Platform Installation
 
-### Linux (Arch Linux, Fedora, Ubuntu, Debian)
+`OTP-Local CLI` requires Python 3.14. For modern operating systems enforcing externally managed Python environments ([PEP 668](https://peps.python.org/pep-0668/)), installation via [`pipx`](https://pipx.pypa.io/) or [`uv tool`](https://docs.astral.sh/uv/) is strongly recommended to isolate CLI dependencies without modifying system Python.
+
+### macOS (Homebrew + pipx)
 
 ```sh
-# Install system prerequisites (optional for full capability)
-sudo apt-get install -y qrencode fzf wl-clipboard  # Debian/Ubuntu
-# sudo pacman -S qrencode fzf wl-clipboard        # Arch Linux
+# 1. Install prerequisites and pipx via Homebrew
+brew install qrencode fzf 1password-cli pipx
+pipx ensurepath
 
-# Install via pip
-pip install authy-local
+# 2. Install from local repository clone
+pipx install .
 
-# Run health diagnostics
+# Or install directly from GitHub without cloning:
+# pipx install git+https://github.com/doublegate/OTP-Local_CLI.git
+
+# 3. Verify installation and run diagnostics
 otp-local doctor
 ```
 
-### macOS
+### Linux (Arch Linux, Fedora, Ubuntu, Debian)
 
 ```sh
-# Install prerequisites via Homebrew
-brew install qrencode fzf 1password-cli
+# 1. Install prerequisites and pipx
+sudo apt-get install -y qrencode fzf wl-clipboard pipx  # Debian/Ubuntu
+# sudo pacman -S qrencode fzf wl-clipboard python-pipx   # Arch Linux
+pipx ensurepath
 
-# Install via pip
-pip install authy-local
+# 2. Install from local repository clone
+pipx install .
 
-# Run health diagnostics
+# Or install directly from GitHub without cloning:
+# pipx install git+https://github.com/doublegate/OTP-Local_CLI.git
+
+# 3. Verify installation and run diagnostics
 otp-local doctor
 ```
 
 ### Windows (WSL2 / PowerShell)
 
-Under Windows, `otp-local` is fully supported via standard Python environments or WSL2:
+Under Windows, running within WSL2 is recommended for full POSIX keyrings and hardware integrations. In native PowerShell with Python 3.14:
 
 ```powershell
-# Install via pip
-pip install authy-local
+# Install via pipx in isolated CLI environment
+pipx install .
 
-# Run doctor check
+# Run diagnostics
 otp-local doctor
 ```
+
+### Alternative Installation Methods
+
+<details>
+<summary><strong>Dedicated Virtual Environment (venv)</strong></summary>
+
+```sh
+python3 -m venv ~/.venvs/otp-local
+source ~/.venvs/otp-local/bin/activate
+pip install .
+
+# Symlink binary to your user path if desired:
+# ln -s ~/.venvs/otp-local/bin/otp-local ~/.local/bin/otp-local
+```
+
+</details>
+
+<details>
+<summary><strong>Pre-Built Release Wheel</strong></summary>
+
+```sh
+pipx install https://github.com/doublegate/OTP-Local_CLI/releases/download/v1.0.0/authy_local-1.0.0-py3-none-any.whl
+```
+
+</details>
 
 ---
 
