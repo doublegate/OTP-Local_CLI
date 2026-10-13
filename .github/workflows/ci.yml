@@ -56,21 +56,24 @@ jobs:
 
       - name: Run ruff lint check
         run: |
-          ruff check src tests scripts
+          python -m ruff check src tests scripts
 
       - name: Run ruff format check
         run: |
-          ruff format --check src tests scripts
+          python -m ruff format --check src tests scripts
 
       - name: Run markdownlint
         run: |
           npx markdownlint-cli2
 
-      - name: Run test suite
-        run: |
-          pytest tests -v
-
-      - name: Verify build and smoke test
+      - name: Build package distribution
         run: |
           python -m build --no-isolation
+
+      - name: Run test suite
+        run: |
+          python -m pytest tests -v
+
+      - name: Verify package smoke test
+        run: |
           python scripts/smoke_package.py
