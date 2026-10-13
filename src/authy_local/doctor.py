@@ -176,6 +176,23 @@ def report(env: dict[str, str]) -> dict:
                 result["clock"] = {"state": "available"}
         else:
             result["clock"] = {"state": "available"}
+
+    try:
+        from . import security
+
+        mem_status = security.memory_security_status()
+        result["memory-security"] = {
+            "state": (
+                "available"
+                if mem_status["mlock_supported"] or mem_status["madvise_dontdump_supported"]
+                else "missing"
+            ),
+            "mlock": mem_status["mlock_supported"],
+            "dontdump": mem_status["madvise_dontdump_supported"],
+        }
+    except Exception:
+        pass
+
     return result
 
 
