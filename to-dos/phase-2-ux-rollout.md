@@ -60,6 +60,6 @@ recovery waits determine elapsed time. There are no automatic calendar deadlines
 
 ## Completion evidence
 
-All three sprints passed the [verification report](../docs/2026-10-12-phase-2-verification.md).
+All three sprints passed the [verification report](../docs/reports/2026-10-12-phase-2-verification.md).
 The concrete home installation was separately approved and verified without backend
 access. Human disposable acceptance remains before the Phase 3 pilot.

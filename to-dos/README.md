@@ -15,11 +15,17 @@ migration, and evidence-based closure. Phases 0–2 are complete; Phase 3 awaits
 | [4: optional backends](phase-4-optional-extensions.md) | [4.1](sprints/4.1.md), [4.2](sprints/4.2.md) | Selected backend evidence or explicit skips |
 | [5: completion](phase-5-completion.md) | [5.1](sprints/5.1.md), [5.2](sprints/5.2.md) | Recovery, hardening, and conditional retirement |
 | [6: enrollment](phase-6-otp-enrollment.md) | [6.1](sprints/6.1.md), [6.2](sprints/6.2.md) | Interactive addition from secret string or screen QR code |
+| [7: Windows DPAPI](phase-7-windows-dpapi.md) | [7.1](sprints/7.1.md), [7.2](sprints/7.2.md) | Windows DPAPI backend, PowerShell/NuShell wrappers, and WSL2 interop |
+| [8: FIDO2 CTAP2.1](phase-8-fido2-ctap2.md) | [8.1](sprints/8.1.md), [8.2](sprints/8.2.md) | FIDO2 hardware token HMAC-secret derivation and touch presence |
+| [9: IPC & PAM](phase-9-pam-low-latency-ipc.md) | [9.1](sprints/9.1.md), [9.2](sprints/9.2.md) | Low-latency UNIX socket daemon, shared memory, and Linux PAM module |
+| [10: federation](phase-10-vault-federation.md) | [10.1](sprints/10.1.md), [10.2](sprints/10.2.md) | Bitwarden CLI, KeePassXC KDBX4 direct engine, and multi-vault resolver |
+| [11: security v2](phase-11-security-auditor-v2.md) | [11.1](sprints/11.1.md), [11.2](sprints/11.2.md) | Memory forensics hardening (mlock/MADV_DONTDUMP) and security auditor v2 |
+| [12: v2 architecture](phase-12-v2-architecture.md) | [12.1](sprints/12.1.md), [12.2](sprints/12.2.md) | Universal async core, plugin hook engine, and v2.0.0 public API freeze |
 
 Phase 4 is optional. Neither pass-otp nor totpm is required for the 1Password-only base.
 The existing [foundation checklist](00-foundation.md) is a milestone-level preflight aid;
 the detailed phase/sprint plans define the ordered work. T-AUTH-001, T-AUTH-002, and
-T-AUTH-003 remain milestone aliases, distinct from task IDs T-AUTH-010 through T-AUTH-061.
+T-AUTH-003 remain milestone aliases, distinct from task IDs T-AUTH-010 through T-AUTH-127.
 
 ## Execution discipline
 

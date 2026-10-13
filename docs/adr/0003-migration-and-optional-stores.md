@@ -36,6 +36,6 @@ reported separately. A TPM database backup alone is not treated as recovery.
 
 ## Actions
 
-Execute [pilot and batches](../07-migration-and-recovery.md) only when authorized.
+Execute [pilot and batches](../specs/07-migration-and-recovery.md) only when authorized.
 Record adopted/skipped optional decisions and apply the
-[completion matrix](../09-operations-and-completion.md).
+[completion matrix](../specs/09-operations-and-completion.md).

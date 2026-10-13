@@ -58,4 +58,4 @@ recovery waits determine elapsed time. There are no automatic calendar deadlines
 
 Both sprints complete: accepted design/repository decisions, refreshed host
 evidence and dated operator readiness attestation.
-See the [verification report](../docs/2026-10-12-phase-0-1-verification.md).
+See the [verification report](../docs/reports/2026-10-12-phase-0-1-verification.md).

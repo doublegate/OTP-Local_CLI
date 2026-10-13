@@ -15,8 +15,8 @@ errors, permissions, backups and restore before enrolling anything real.
 
 The companion now supports explicit `--backend pass-otp` and `--backend totpm`
 for show/copy/select and explicit hidden CLI enrollment. 1Password remains default;
-there is no automatic fallback or export. See [ADR 0005](adr/0005-explicit-local-backends.md)
-and [setup preview](2026-10-12-optional-setup.md). The TUI only reads and guides.
+there is no automatic fallback or export. See [ADR 0005](../adr/0005-explicit-local-backends.md)
+and [setup preview](../operations/2026-10-12-optional-setup.md). The TUI only reads and guides.
 
 ## pass-otp design
 
@@ -56,7 +56,7 @@ prove recovery. Do not list existing keys or records into project evidence.
 x86_64 Linux, with system and local installation modes. Names/metadata in its
 SQLite database are a separate confidentiality concern from protected seeds.
 The host has TPM 2.0 capability. Current operator-attested physical generation
-and recovery results are recorded in [project status](../PROJECT-STATUS.md).
+and recovery results are recorded in [project status](../../PROJECT-STATUS.md).
 
 The pinned 0.1.2 release has been reviewed for:
 
@@ -71,7 +71,7 @@ change firmware/PCR policy, modify boot security or install setuid binaries as a
 automatic prerequisite. A database backup alone is not a portable recovery plan;
 maintain an independent factor and rehearse hardware-loss recovery.
 
-The [dated setup guide](2026-10-12-optional-setup.md) records the reviewed build,
+The [dated setup guide](../operations/2026-10-12-optional-setup.md) records the reviewed build,
 exact initialization preview and remaining hardware/recovery acceptance. A
 successful emulator test does not close those operator gates.
 
@@ -157,4 +157,4 @@ confirmation. GPG removal unlinks the exact private ciphertext file. TPM removal
 uses an exact transaction against the pinned local database schema; native
 substring-matching deletion is not used. macOS Keychain removal deletes the exact
 matching generic password service item via `/usr/bin/security delete-generic-password`.
-Keys, configuration and independent recovery copies remain intact. See [ADR 0007](adr/0007-confirmed-local-item-deletion.md).
+Keys, configuration and independent recovery copies remain intact. See [ADR 0007](../adr/0007-confirmed-local-item-deletion.md).

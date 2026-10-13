@@ -6,7 +6,7 @@ Track completion in [PROJECT-STATUS.md](../PROJECT-STATUS.md).
 Legacy milestone checklist. The authoritative delivery tasks now live in
 [sprints 0.1 and 0.2](README.md); do not maintain duplicate task completion here.
 The current research and read-only host snapshot are in
-[research evidence](../docs/10-research-and-host-evidence.md). They do not complete
+[research evidence](../docs/specs/10-research-and-host-evidence.md). They do not complete
 human authentication or recovery readiness. Phase 0 is now complete with separate
 operator attestation; the prompts below are historical, not a second pending backlog.
 

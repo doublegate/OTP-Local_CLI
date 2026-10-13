@@ -28,7 +28,7 @@ All tasks in each sprint must have explicit automated test verification before c
 - 1Password backend enrollment tagging new items with `"OTP"`.
 - Textual TUI Action 5 (`AddOtpModal`) with reactive countdown and clipboard test code copying.
 - Unit and adversarial test suites: `tests/test_enrollment.py`, `tests/test_onepassword_enrollment.py`, `tests/test_tui_enrollment.py`.
-- Architectural decision record [ADR 0008](../docs/adr/0008-interactive-otp-enrollment.md) and [Specification](../docs/12-otp-enrollment.md).
+- Architectural decision record [ADR 0008](../docs/adr/0008-interactive-otp-enrollment.md) and [Specification](../docs/specs/12-otp-enrollment.md).
 
 ## Exit Criteria
 

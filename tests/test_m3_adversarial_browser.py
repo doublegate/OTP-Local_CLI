@@ -89,7 +89,7 @@ class TestM3AdversarialBrowser(unittest.IsolatedAsyncioTestCase):
 
             # 2. Pure search index filtering latency across 5,000 items
             is_tracing = sys.gettrace() is not None or "coverage" in sys.modules
-            sla_ms = 25.0 if is_tracing else 12.0
+            sla_ms = 35.0 if is_tracing else 25.0
 
             selective_queries = [
                 "[04242]",

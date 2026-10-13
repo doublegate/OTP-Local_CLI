@@ -88,21 +88,21 @@ were not separately retested.
 and separately owned native assets/licenses. Repeated application preview and
 native apply report unchanged; installed doctor sees all native tools and keeps
 authentication/TPM readiness unknown. Installed controlling-PTY dashboard/fish
-checks pass. See [Phase 4–5 evidence](docs/2026-10-12-phase-4-5-verification.md).
+checks pass. See [Phase 4–5 evidence](docs/reports/2026-10-12-phase-4-5-verification.md).
 
 2026-10-12: installed 1.0.0rc2 with private resident scope for all three backends
 and native searchable item browsing. The full gate passed 208 tests with 94%
 coverage. An installed controlling-terminal check used only a synthetic HOME and
 verified saved scope, native pass metadata browsing, empty PATH and restored
 terminal modes. Repeat installation preview reports unchanged. Real-use browser
-acceptance remains operator-only; see [refinement evidence](docs/2026-10-12-tui-resident-scope-verification.md).
+acceptance remains operator-only; see [refinement evidence](docs/reports/2026-10-12-tui-resident-scope-verification.md).
 
 2026-10-12: installed 1.0.0rc4 with typed confirmation for one selected GPG/TPM
 entry deletion, exact local targeting and non-identifying pre-operation audit.
 The full gate passed 250 tests with 94% coverage. Installed synthetic deletion
 verified confirmation, list refresh, preserved keys/config and restored terminal.
 Actual pinned totpm schema compatibility was checked using a temporary database
-without TPM access. No real entry was deleted; see [deletion evidence](docs/2026-10-12-tui-status-tag-verification.md).
+without TPM access. No real entry was deleted; see [deletion evidence](docs/reports/2026-10-12-tui-status-tag-verification.md).
 
 2026-10-12: implemented Phase 6 interactive OTP enrollment across CLI (`otp-local enroll`)
 and Textual TUI (`AddOtpModal`, Action 9). Supported input paths include raw Base32 strings,
@@ -111,7 +111,7 @@ local image files securely decoded via stdin streaming to `zbarimg`. Features li
 preview with 30-second countdown bar, instant challenge verification ("Copy Test Code"),
 and multi-backend enrollment into 1Password (Login item tagged `"OTP"`), pass-otp, and totpm
 with cryptographic in-memory zeroing of secret buffers upon dialogue dismissal. The full
-test gate passed all 616 tests (495 subtests). See [specification](docs/12-otp-enrollment.md)
+test gate passed all 616 tests (495 subtests). See [specification](docs/specs/12-otp-enrollment.md)
 and [ADR 0008](docs/adr/0008-interactive-otp-enrollment.md).
 
 2026-10-13: delivered final release v1.0.0. Added hardware backends (`yubikey`, `tpm2-totp`),
@@ -150,11 +150,11 @@ Independent recovery for intended TPM accounts was reported pass. These are
 human attestations; agents did not access private keys, seeds or stores.
 
 Continue with private service recovery rehearsal and selected real adoption in
-[Phase 4–5 acceptance](docs/2026-10-12-phase-4-5-operator-checkpoints.md), section D.
+[Phase 4–5 acceptance](docs/operations/2026-10-12-phase-4-5-operator-checkpoints.md), section D.
 Sections A–C are already performed; do not repeat key or TPM initialization.
 Confirm the pilot evidence is dated in the external private ledger, then complete
-Checkpoint C batches in [operator checkpoints](docs/2026-10-12-phase-3-operator-checkpoints.md).
-The [Phase 2 report](docs/2026-10-12-phase-2-verification.md)
+Checkpoint C batches in [operator checkpoints](docs/operations/2026-10-12-phase-3-operator-checkpoints.md).
+The [Phase 2 report](docs/reports/2026-10-12-phase-2-verification.md)
 records checks, operator approvals and security limits. The legacy foundation
 checklist is historical navigation, not a second task authority.
 

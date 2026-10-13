@@ -1,6 +1,6 @@
 # Optional backend setup preview — 2026-10-12
 
-This supplements [the optional-backend specification](08-optional-backends.md).
+This supplements [the optional-backend specification](../specs/08-optional-backends.md).
 The operator selected both local stores. Authy remains retained. Installing
 software and passing synthetic tests do not prove real enrollment or recovery.
 
@@ -172,7 +172,7 @@ in a separate private keyring/store. Record only pass/fail and a location refere
 in the external ledger. Do not place backups or key material in this repository.
 
 Use the companion's explicit hidden enrollment flow one account at a time. Follow
-the [migration/recovery gates](07-migration-and-recovery.md); do not automate seed
+the [migration/recovery gates](../specs/07-migration-and-recovery.md); do not automate seed
 transfer from 1Password or remove Authy entries. A successful emulator or synthetic
 keyring test does not close real hardware, dedicated-key backup or account login
 acceptance. Report only aggregate outcomes.

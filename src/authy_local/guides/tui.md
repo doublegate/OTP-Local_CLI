@@ -18,7 +18,7 @@ missing or unknown states. It changes only when Doctor is run again; there is no
 automatic refresh. Authentication remains unknown, and the summary is not proof
 of backend access or migration readiness.
 
-![Synthetic dashboard rendered from actual screen cells](assets/dashboard-preview.png)
+![Synthetic dashboard rendered from actual screen cells](../assets/dashboard-preview.png)
 
 The visual research references are [btop's official project](https://github.com/aristocratos/btop)
 and [htop's official site](https://htop.dev/): bordered information panels,
@@ -192,7 +192,7 @@ recovery safeguards remain the CLI installer's responsibility.
 The migration guide is static guidance. Enrollment and local-store setup use
 explicit CLI/operator workflows outside this UI. The guide cannot authorize
 account changes, enroll factors, update the private ledger or mark checks
-complete. Follow the [private operator checkpoints](2026-10-12-phase-3-operator-checkpoints.md)
+complete. Follow the [private operator checkpoints](../operations/2026-10-12-phase-3-operator-checkpoints.md)
 outside agent tools. Only dated operator attestations and reconciled aggregate
 evidence advance migration status. Authy remains retained until the operator's
 separate retirement decision after project development and recovery checks.

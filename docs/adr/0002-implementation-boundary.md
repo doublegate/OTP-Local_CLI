@@ -33,5 +33,5 @@ not claimed to provide secure zeroization. No extra network API is introduced.
 ## Actions
 
 Implementation choice confirmed; build synthetic fake-tool tests first; enforce
-[CLI contracts](../03-cli-specification.md) and
-[installation contracts](../06-installation-and-instantiation.md).
+[CLI contracts](../specs/03-cli-specification.md) and
+[installation contracts](../specs/06-installation-and-instantiation.md).

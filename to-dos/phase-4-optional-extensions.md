@@ -10,7 +10,7 @@ Select pass-otp or totpm only where their distinct resilience or machine-binding
 The operator selected both capabilities, a dedicated GPG key and totpm local mode.
 Only a privately selected subset is duplicated after recovery acceptance. See
 [the decision](../docs/adr/0005-explicit-local-backends.md) and
-[remaining private checkpoints](../docs/2026-10-12-phase-4-5-operator-checkpoints.md).
+[remaining private checkpoints](../docs/operations/2026-10-12-phase-4-5-operator-checkpoints.md).
 
 ## Entry conditions and dependencies
 

@@ -58,4 +58,4 @@ recovery waits determine elapsed time. There are no automatic calendar deadlines
 
 Both sprints complete within synthetic-software scope. Live companion
 compatibility and home installation remain later-phase gates.
-See the [verification report](../docs/2026-10-12-phase-0-1-verification.md).
+See the [verification report](../docs/reports/2026-10-12-phase-0-1-verification.md).

@@ -23,10 +23,12 @@ def main():
     tasks = []
     for path in (ROOT / "to-dos/sprints").glob("*.md"):
         tasks += re.findall(r"^- \[[ x]\] \*\*(T-AUTH-\d+):", path.read_text(), re.M)
-    expected_tasks = {f"T-AUTH-{i:03}" for i in range(10, 62)} | {
-        f"T-AUTH-{i:03}" for i in range(70, 78)
-    }
-    if len(tasks) != 60 or set(tasks) != expected_tasks:
+    expected_tasks = (
+        {f"T-AUTH-{i:03}" for i in range(10, 62)}
+        | {f"T-AUTH-{i:03}" for i in range(70, 78)}
+        | {f"T-AUTH-{i:03}" for i in range(80, 128)}
+    )
+    if len(tasks) != 108 or set(tasks) != expected_tasks:
         failures.append("Sprint task allocation changed or contains duplicate IDs")
     if hashlib.sha256(REF.read_bytes()).hexdigest() != EXPECTED:
         failures.append("Immutable reference hash changed")

@@ -137,7 +137,7 @@ pilot ledger record and reconcile the full inventory. Review disk/swap protectio
 lock screen, terminal recording, core dumps, clipboard history, backup ownership
 and temporary artifacts. Rehearse unavailable workstation, locked 1Password,
 lost mobile access and optional-store failure without disrupting working access.
-The [completion matrix](09-operations-and-completion.md) controls final acceptance.
+The [completion matrix](../specs/09-operations-and-completion.md) controls final acceptance.
 The delivered 1.0.0rc1 is a candidate until these operator gates pass. Retaining
 Authy is the selected disposition; retirement is not authorized by this checklist.
 

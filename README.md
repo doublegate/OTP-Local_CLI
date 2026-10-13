@@ -336,11 +336,11 @@ python scripts/smoke_package.py
 ## Documentation Index
 
 - [Project Status & Decisions](PROJECT-STATUS.md)
-- [Architecture & Contract Specification](docs/03-cli-specification.md)
-- [Textual TUI Guide & Shortcuts](docs/11-tui.md)
-- [Desktop Integration & Systemd Units](docs/13-desktop-integration.md)
+- [Architecture & Contract Specification](docs/specs/03-cli-specification.md)
+- [Textual TUI Guide & Shortcuts](docs/specs/11-tui.md)
+- [Desktop Integration & Systemd Units](docs/specs/13-desktop-integration.md)
 - [Security Model & Threat Boundaries](SECURITY.md)
-- [Optional Hardware & TPM Setup](docs/2026-10-12-optional-setup.md)
+- [Optional Hardware & TPM Setup](docs/operations/2026-10-12-optional-setup.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
 - [Release Changelog](CHANGELOG.md)
 

@@ -58,8 +58,8 @@ recovery waits determine elapsed time. There are no automatic calendar deadlines
 
 ## Current checkpoint
 
-The [Phase 2 report](../docs/2026-10-12-phase-2-verification.md) records completed
+The [Phase 2 report](../docs/reports/2026-10-12-phase-2-verification.md) records completed
 software gates and approved home installation. Follow the
-[private operator checkpoints](../docs/2026-10-12-phase-3-operator-checkpoints.md)
-and [aggregate template](../docs/migration-batch-template.md). Pilot tasks T-AUTH-034–036 are complete on operator attestation. Private ledger
+[private operator checkpoints](../docs/operations/2026-10-12-phase-3-operator-checkpoints.md)
+and [aggregate template](../docs/templates/migration-batch-template.md). Pilot tasks T-AUTH-034–036 are complete on operator attestation. Private ledger
 confirmation (T-AUTH-037) and all batch tasks remain pending.

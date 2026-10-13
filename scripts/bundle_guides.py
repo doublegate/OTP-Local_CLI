@@ -5,12 +5,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GUIDES = {
-    "optional": "08-optional-backends.md",
-    "setup": "2026-10-12-optional-setup.md",
-    "acceptance": "2026-10-12-phase-4-5-operator-checkpoints.md",
-    "migration": "07-migration-and-recovery.md",
-    "recovery": "09-operations-and-completion.md",
-    "tui": "11-tui.md",
+    "optional": "specs/08-optional-backends.md",
+    "setup": "operations/2026-10-12-optional-setup.md",
+    "acceptance": "operations/2026-10-12-phase-4-5-operator-checkpoints.md",
+    "migration": "specs/07-migration-and-recovery.md",
+    "recovery": "specs/09-operations-and-completion.md",
+    "tui": "specs/11-tui.md",
 }
 
 
