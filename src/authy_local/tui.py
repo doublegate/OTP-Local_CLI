@@ -70,6 +70,7 @@ BACKENDS = (
     ("tpm2-totp", "TPM 2.0 TOTP"),
     ("keychain", "macOS Keychain"),
     ("dpapi", "Windows DPAPI"),
+    ("fido2", "FIDO2 Security Key"),
 )
 PROFILE_FIELDS = {
     "onepassword": ("account", "vault"),
@@ -79,6 +80,7 @@ PROFILE_FIELDS = {
     "tpm2-totp": (),
     "keychain": (),
     "dpapi": (),
+    "fido2": (),
 }
 HELP = (
     "Keyboard controls",
@@ -364,6 +366,7 @@ def execute(screen, args, dispatch, curses, preview=None):
             "dpapi",
             "credman",
             "windows-hello",
+            "fido2",
             "qrencode",
             "pinentry",
             "gpg-agent",
@@ -547,6 +550,7 @@ def configure_scope(screen, curses, backend, profile):
         "tpm2-totp": {},
         "keychain": {},
         "dpapi": {},
+        "fido2": {},
     }
     fields = scope_fields(backend)
     initial = [(profile or defaults[backend])[name] for name in PROFILE_FIELDS[backend]]
@@ -1158,6 +1162,7 @@ class DoctorModal(ModalScreen[None]):
                     "dpapi",
                     "credman",
                     "windows-hello",
+                    "fido2",
                     "pbcopy",
                     "wl-copy",
                     "fish",
@@ -2388,7 +2393,17 @@ class TokenBrowserScreen(Screen):
 
         async def run_show() -> None:
             self._update_status_text("Retrieving OTP code...")
-            status, summary, lines = await self.app.aexecute(args)
+            touch_modal = None
+            if self.backend == "fido2" and self.app.is_running:
+                touch_modal = Fido2TouchModal(account=key)
+                self.app.push_screen(touch_modal)
+
+            try:
+                status, summary, lines = await self.app.aexecute(args)
+            finally:
+                if touch_modal is not None and touch_modal.is_mounted:
+                    touch_modal.dismiss(True)
+
             if status == 0:
                 code = lines[1] if len(lines) > 1 else ""
 
@@ -2428,7 +2443,17 @@ class TokenBrowserScreen(Screen):
 
         async def run_copy() -> None:
             self._update_status_text("Copying OTP code...")
-            status, summary, lines = await self.app.aexecute(args)
+            touch_modal = None
+            if self.backend == "fido2" and self.app.is_running:
+                touch_modal = Fido2TouchModal(account=key)
+                self.app.push_screen(touch_modal)
+
+            try:
+                status, summary, lines = await self.app.aexecute(args)
+            finally:
+                if touch_modal is not None and touch_modal.is_mounted:
+                    touch_modal.dismiss(True)
+
             if status == 0:
                 if hasattr(self.app, "notify_copy"):
                     self.app.notify_copy(label)
@@ -2447,7 +2472,7 @@ class TokenBrowserScreen(Screen):
         self.app.action_show_help()
 
     def action_request_delete(self) -> None:
-        if self.backend not in ("pass-otp", "totpm"):
+        if self.backend not in ("pass-otp", "totpm", "keychain", "dpapi", "fido2"):
             return
         item = self._get_highlighted_item()
         if item is None:
@@ -2741,7 +2766,7 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
                         max_length=1024,
                         id="scope-totpm-config",
                     )
-                elif self.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
+                elif self.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
                     yield Static(
                         "Hardware/System backend accesses token directly via secure interface."
                     )
@@ -2752,9 +2777,13 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
                 yield Button("Cancel [Esc]", id="btn-cancel-scope", variant="default")
 
     def on_mount(self) -> None:
-        first_input = self.query(Input).first()
-        if first_input is not None:
-            first_input.focus()
+        try:
+            self.query(Input).first().focus()
+        except Exception:
+            try:
+                self.query(Button).first().focus()
+            except Exception:
+                pass
 
     @on(Button.Pressed, "#btn-save-scope")
     def on_save_pressed(self) -> None:
@@ -2785,7 +2814,7 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
         elif self.backend == "totpm":
             config = self.query_one("#scope-totpm-config", Input).value.strip()
             scope_dict = {"config": config}
-        elif self.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
+        elif self.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
             self.app.notify(f"Backend {self.backend} needs no saved file scope.")
             self.dismiss({})
             return
@@ -2822,6 +2851,7 @@ class BackendSelectModal(ModalScreen[str | None]):
         Binding("5", "select_5", "tpm2-totp", show=False),
         Binding("6", "select_6", "keychain", show=False),
         Binding("7", "select_7", "dpapi", show=False),
+        Binding("8", "select_8", "fido2", show=False),
     ]
 
     def __init__(self, current_backend: str = "onepassword", **kwargs) -> None:
@@ -2839,6 +2869,7 @@ class BackendSelectModal(ModalScreen[str | None]):
                 Option("5  TPM 2.0 TOTP (tpm2-totp)", id="opt-tpm2-totp"),
                 Option("6  macOS Keychain (keychain)", id="opt-keychain"),
                 Option("7  Windows DPAPI (dpapi)", id="opt-dpapi"),
+                Option("8  FIDO2 Security Key (fido2)", id="opt-fido2"),
                 id="backend-select-list",
             )
             with Horizontal(id="backend-button-bar"):
@@ -2855,6 +2886,7 @@ class BackendSelectModal(ModalScreen[str | None]):
             "tpm2-totp": 4,
             "keychain": 5,
             "dpapi": 6,
+            "fido2": 7,
         }
         opt_list.highlighted = mapping.get(self.current_backend, 0)
         opt_list.focus()
@@ -2880,6 +2912,9 @@ class BackendSelectModal(ModalScreen[str | None]):
     def action_select_7(self) -> None:
         self._choose("dpapi")
 
+    def action_select_8(self) -> None:
+        self._choose("fido2")
+
     def action_cancel_select(self) -> None:
         self.dismiss(None)
 
@@ -2893,6 +2928,7 @@ class BackendSelectModal(ModalScreen[str | None]):
             "tpm2-totp",
             "keychain",
             "dpapi",
+            "fido2",
         ]
         if event.option_index is not None and 0 <= event.option_index < len(backends):
             self._choose(backends[event.option_index])
@@ -2908,6 +2944,7 @@ class BackendSelectModal(ModalScreen[str | None]):
             "tpm2-totp",
             "keychain",
             "dpapi",
+            "fido2",
         ]
         if opt_list.highlighted is not None and 0 <= opt_list.highlighted < len(backends):
             self._choose(backends[opt_list.highlighted])
@@ -3284,6 +3321,11 @@ class AddOtpModal(ModalScreen[None]):
                         value=(self.current_backend == "dpapi"),
                         id="chk-dpapi",
                     )
+                    yield Checkbox(
+                        "FIDO2 Security Key",
+                        value=(self.current_backend == "fido2"),
+                        id="chk-fido2",
+                    )
 
                 yield Static("", id="add-otp-status-banner")
 
@@ -3485,8 +3527,9 @@ class AddOtpModal(ModalScreen[None]):
         save_tpm = self.query_one("#chk-totpm", Checkbox).value
         save_keychain = self.query_one("#chk-keychain", Checkbox).value
         save_dpapi = self.query_one("#chk-dpapi", Checkbox).value
+        save_fido2 = self.query_one("#chk-fido2", Checkbox).value
 
-        if not any((save_op, save_pass, save_tpm, save_keychain, save_dpapi)):
+        if not any((save_op, save_pass, save_tpm, save_keychain, save_dpapi, save_fido2)):
             self._set_status("[red]Error: Select at least one target backend storage.[/]")
             return
 
@@ -3623,6 +3666,23 @@ class AddOtpModal(ModalScreen[None]):
                 except Exception as exc:
                     errors.append(f"Windows DPAPI: {exc}")
 
+            # 6. FIDO2 Security Key
+            if save_fido2:
+                try:
+                    from .backends import fido2
+
+                    raw_acc = account or issuer or "default"
+                    acc_name = (
+                        re.sub(r"[^A-Za-z0-9_.-]+", "_", raw_acc).strip("._-")[:64] or "default"
+                    )
+                    if not re.match(r"[A-Za-z0-9]", acc_name):
+                        acc_name = f"user_{acc_name}"[:64]
+
+                    await asyncio.to_thread(fido2.fido2_enroll, acc_name, params.secret, env)
+                    enrolled.append("FIDO2 Security Key")
+                except Exception as exc:
+                    errors.append(f"FIDO2: {exc}")
+
             if errors:
                 err_text = "; ".join(errors)
                 self._set_status(f"[red]Enrollment errors: {err_text}[/]")
@@ -3637,6 +3697,168 @@ class AddOtpModal(ModalScreen[None]):
                 self.dismiss(None)
 
         self.run_worker(run_enroll())
+
+
+class Fido2TouchModal(ModalScreen[bool]):
+    """Modal screen displaying an interactive pulsing touch indicator and countdown timer for FIDO2."""
+
+    DEFAULT_CSS = """
+    Fido2TouchModal {
+        align: center middle;
+        background: rgba(0, 0, 0, 0.75);
+    }
+
+    #fido2-touch-dialog {
+        width: 64;
+        height: auto;
+        border: round cyan;
+        background: $surface;
+        padding: 1 2;
+    }
+
+    #fido2-touch-title {
+        color: cyan;
+        text-style: bold;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #fido2-touch-account {
+        color: ansi_white;
+        text-align: center;
+        margin-bottom: 1;
+    }
+
+    #fido2-touch-pulse {
+        text-align: center;
+        height: 3;
+        content-align: center middle;
+        margin-top: 1;
+        margin-bottom: 1;
+    }
+
+    #fido2-touch-countdown {
+        text-align: center;
+        color: ansi_yellow;
+        margin-bottom: 1;
+    }
+
+    #fido2-touch-bar {
+        width: 100%;
+        margin-bottom: 1;
+    }
+
+    #fido2-touch-button-bar {
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #fido2-touch-button-bar Button {
+        margin: 0 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel_touch", "Cancel", show=False),
+        Binding("q", "cancel_touch", "Cancel", show=False),
+        Binding("t", "simulate_touch", "Touch", show=False),
+    ]
+
+    PULSE_FRAMES = [
+        "[bold cyan]>>> [  *  ] TOUCH SECURITY KEY [  *  ] <<<[/bold cyan]",
+        "[bold bright_white]>>>> [ *** ] TOUCH SECURITY KEY [ *** ] <<<<[/bold bright_white]",
+        "[bold yellow]>>>>> [*****] TOUCH SECURITY KEY [*****] <<<<<[/bold yellow]",
+        "[dim cyan]>> [     ] TOUCH SECURITY KEY [     ] <<[/dim cyan]",
+    ]
+
+    def __init__(
+        self,
+        account: str = "",
+        timeout_seconds: float = 30.0,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        self.account = account
+        self.timeout_seconds = max(1.0, float(timeout_seconds))
+        self.remaining_seconds = self.timeout_seconds
+        self.pulse_step = 0
+        self._timer = None
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="fido2-touch-dialog"):
+            yield Static("FIDO2 Security Key Required", id="fido2-touch-title")
+            sub_text = (
+                f"Account: {self.account}" if self.account else "Cryptographic Key Presence Test"
+            )
+            yield Static(sub_text, id="fido2-touch-account")
+            yield Static(self.PULSE_FRAMES[0], id="fido2-touch-pulse")
+            yield CountdownBar(id="fido2-touch-bar")
+            yield Static(
+                f"Waiting for physical touch... {int(self.remaining_seconds)}s remaining",
+                id="fido2-touch-countdown",
+            )
+            with Horizontal(id="fido2-touch-button-bar"):
+                yield Button("Touch Key [t]", id="btn-simulate-touch", variant="primary")
+                yield Button("Cancel [Esc]", id="btn-cancel-touch", variant="default")
+
+    def on_mount(self) -> None:
+        cbar = self.query_one("#fido2-touch-bar", CountdownBar)
+        cbar.remaining_seconds = self.remaining_seconds
+        self._timer = self.set_interval(0.25, self._tick)
+
+    def on_unmount(self) -> None:
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+
+    def _tick(self) -> None:
+        self.remaining_seconds -= 0.25
+        self.pulse_step += 1
+
+        pulse_widget = self.query_one("#fido2-touch-pulse", Static)
+        frame = self.PULSE_FRAMES[self.pulse_step % len(self.PULSE_FRAMES)]
+        pulse_widget.update(frame)
+
+        cbar = self.query_one("#fido2-touch-bar", CountdownBar)
+        cbar.remaining_seconds = max(0.0, self.remaining_seconds)
+        cbar.is_expired = self.remaining_seconds <= 0.0
+
+        lbl = self.query_one("#fido2-touch-countdown", Static)
+        rem_int = max(0, int(round(self.remaining_seconds)))
+        lbl.update(f"Waiting for physical touch... {rem_int}s remaining")
+
+        if self.remaining_seconds <= 0.0:
+            if self._timer is not None:
+                self._timer.stop()
+                self._timer = None
+            self.dismiss(False)
+
+    def action_cancel_touch(self) -> None:
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+        self.dismiss(False)
+
+    def action_simulate_touch(self) -> None:
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+        self.dismiss(True)
+
+    def touch_received(self) -> None:
+        """Invoked programmatically or via device callback upon touch confirmation."""
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#btn-simulate-touch")
+    def on_touch_pressed(self) -> None:
+        self.action_simulate_touch()
+
+    @on(Button.Pressed, "#btn-cancel-touch")
+    def on_cancel_pressed(self) -> None:
+        self.action_cancel_touch()
 
 
 class DashboardScreen(Screen):
@@ -4865,6 +5087,7 @@ class AuthyApp(App):
         "migration_guide": MigrationGuideModal,
         "saved_scope": SavedScopeModal,
         "message": MessageModal,
+        "fido2_touch": Fido2TouchModal,
     }
 
     BINDINGS = [
@@ -5077,6 +5300,9 @@ class AuthyApp(App):
 
     def _ensure_scope_and_run(self, action_mode: str) -> None:
         backend = self.current_backend
+        if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
+            self._prompt_item_and_execute(backend, action_mode)
+            return
         if backend not in self.profiles:
 
             def on_scope_saved(new_profiles):
@@ -5104,7 +5330,16 @@ class AuthyApp(App):
 
             async def run_execute() -> None:
                 self.session_status = f"Executing {mode}..."
-                status, summary, lines = await self.aexecute(cli_args)
+                touch_modal = None
+                if backend == "fido2" and self.is_running:
+                    touch_modal = Fido2TouchModal(account=key)
+                    self.push_screen(touch_modal)
+
+                try:
+                    status, summary, lines = await self.aexecute(cli_args)
+                finally:
+                    if touch_modal is not None and touch_modal.is_mounted:
+                        touch_modal.dismiss(True)
                 if status == 0 and mode == "show":
                     code = lines[1] if len(lines) > 1 else ""
 
@@ -5161,6 +5396,9 @@ class AuthyApp(App):
 
     def _open_browser(self, default_action: str) -> None:
         backend = self.current_backend
+        if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
+            self._launch_browser(backend, default_action)
+            return
         if backend not in self.profiles:
 
             def on_scope_saved(new_profiles):
@@ -5294,6 +5532,10 @@ class AuthyApp(App):
                 "tpm-device",
                 "keychain",
                 "secure-enclave",
+                "dpapi",
+                "credman",
+                "windows-hello",
+                "fido2",
                 "qrencode",
                 "pinentry",
                 "gpg-agent",

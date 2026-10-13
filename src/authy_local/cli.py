@@ -64,6 +64,16 @@ def parser() -> Parser:
     enroll.add_argument("--item-id")
     enroll.add_argument("--qr-image")
     enroll.add_argument("--qr-clipboard", action="store_true")
+    enroll.add_argument(
+        "--fido2",
+        action="store_true",
+        help="Enroll into FIDO2 hardware security key",
+    )
+    enroll.add_argument(
+        "--backup-token",
+        action="store_true",
+        help="Enroll an additional backup FIDO2 hardware token",
+    )
     pick = commands.add_parser("pick", allow_abbrev=False)
     pick.add_argument("--launcher", choices=("auto", "wofi", "rofi", "fzf"), default="auto")
     pick.add_argument("--no-notify", action="store_true")
@@ -213,6 +223,12 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
 
             return tui.run(dispatch, preview=preview)
         if args.command == "enroll":
+            if getattr(args, "fido2", False):
+                if args.backend != "onepassword" and args.backend != "fido2":
+                    raise AppError(2)
+                args.backend = "fido2"
+            if getattr(args, "backup_token", False) and args.backend != "fido2":
+                raise AppError(2)
             if not args.apply:
                 raise AppError(2)
             if (
@@ -349,7 +365,10 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                         raise AppError(3) from None
                     finally:
                         confirmation = ""
-                fido2.fido2_enroll(args.account, secret, env)
+                if getattr(args, "backup_token", False):
+                    fido2.fido2_add_backup_token(args.account, secret, env)
+                else:
+                    fido2.fido2_enroll(args.account, secret, env)
             else:
                 from .backends import local
 

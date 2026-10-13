@@ -286,3 +286,29 @@ class TestFido2Backend(unittest.TestCase):
         tui_items.remove("fido2", {}, "acct_fido2_tui", self.env)
         recs_after = tui_items.records("fido2", {}, self.env)
         self.assertEqual(len(recs_after), 0)
+
+    def test_fido2_multi_token_redundancy(self) -> None:
+        account = "multi_key_acct"
+        secret = "JBSWY3DPEHPK3PXP"
+        params = OtpParameters(secret=secret, account=account)
+        expected_code, _ = generate_totp_code(params, timestamp=1234567.0)
+
+        # 1. Enroll primary token
+        primary_dev = MockCtapHidDevice(has_hmac_secret=True)
+        fido2._set_device_override([primary_dev])
+        fido2.fido2_enroll(account, secret, self.env)
+
+        # 2. Enroll secondary backup token
+        backup_dev = MockCtapHidDevice(has_hmac_secret=True)
+        fido2._set_device_override([backup_dev])
+        fido2.fido2_add_backup_token(account, secret, self.env)
+
+        # 3. Disconnect primary, test generation using backup token
+        fido2._set_device_override([backup_dev])
+        code_backup = fido2.fido2_code(account, self.env, timestamp=1234567.0)
+        self.assertEqual(code_backup, expected_code)
+
+        # 4. Disconnect backup, test generation using primary token
+        fido2._set_device_override([primary_dev])
+        code_primary = fido2.fido2_code(account, self.env, timestamp=1234567.0)
+        self.assertEqual(code_primary, expected_code)

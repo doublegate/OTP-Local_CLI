@@ -5,6 +5,10 @@
 ### Added
 
 - FIDO2 CTAP 2.1 hardware security key backend in `src/authy_local/backends/fido2.py` utilizing CTAP2 `hmac-secret` / WebAuthn PRF extensions and AES-256-GCM seed encryption.
+- Multi-token enrollment architecture supporting primary and secondary backup hardware security keys with synchronized salt configurations (`fido2_add_backup_token`, candidate fallback loop in `fido2_code`).
+- Textual TUI `Fido2TouchModal` featuring an interactive pulsing visual touch indicator and timeout countdown timer in `src/authy_local/tui.py`.
+- Interactive backend provider selection for `fido2` via hotkey `8` in `BackendSelectModal` and direct token enrollment via `chk-fido2` in `AddOtpModal`.
+- CLI enrollment extension via `--fido2` shortcut flag and `--backup-token` flag in `otp-local enroll`.
 - Physical authenticator discovery, USB HID device enumeration, and optional user PIN verification for FIDO2 credentials.
 - In-memory cryptographic zeroization of decrypted FIDO2 TOTP secrets via `ctypes.memset`.
 - Integration of `--backend fido2` across CLI commands (`show`, `copy`, `select`, `enroll`, `pick`), deletion auditing, and `doctor` system diagnostics.

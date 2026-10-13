@@ -249,19 +249,22 @@ def fido2_enroll(
         "ciphertext": ciphertext.hex(),
         "aaguid": str(aaguid),
         "created_at": time.time(),
+        "backup_tokens": [],
     }
     _write_vault(vault, env)
 
 
-def fido2_code(
+def fido2_add_backup_token(
     account: str,
+    secret: str,
     env: dict[str, str],
     pin: str | None = None,
     touch_callback: Callable[[], None] | None = None,
-    timestamp: float | None = None,
-) -> str:
-    """Retrieve FIDO2-protected TOTP code upon physical touch gesture and optional PIN."""
+) -> None:
+    """Register a secondary backup FIDO2 security key for an enrolled account."""
     if not account or not LABEL.fullmatch(account):
+        raise AppError(2)
+    if not secret:
         raise AppError(2)
     if not HAS_FIDO2 or not HAS_CRYPTOGRAPHY:
         raise AppError(3)
@@ -271,32 +274,40 @@ def fido2_code(
     if not entry:
         raise AppError(4)
 
-    cred_id = bytes.fromhex(entry["credential_id"])
-    salt = bytes.fromhex(entry["salt"])
-    nonce = bytes.fromhex(entry["nonce"])
-    ciphertext = bytes.fromhex(entry["ciphertext"])
-
     dev, ctap = get_ctap2_device()
-
     if touch_callback:
         touch_callback()
 
     client_data_hash = hashlib.sha256(
-        f"OTP-Local Code Generation: {account}".encode("utf-8")
+        f"OTP-Local Backup Enrollment: {account}".encode("utf-8")
     ).digest()
+    user_id = hashlib.sha256(account.encode("utf-8")).digest()
+    salt = bytes.fromhex(entry["salt"])
 
     try:
-        if hasattr(dev, "mock_assertion"):
-            # Synthetic mock path
-            hmac_output = dev.mock_assertion(
-                cred_id=cred_id, salt=salt, pin=pin
+        if hasattr(dev, "mock_enroll"):
+            cred_id, hmac_output, aaguid = dev.mock_enroll(
+                account=account, salt=salt, pin=pin
             )
         else:
-            # Native fido2 CTAP2 path
             pin_auth = None
             if pin and hasattr(ctap, "info") and ctap.info.options.get("clientPin"):
                 client_pin = ClientPin(ctap)
                 pin_auth = client_pin.get_pin_token(pin)
+
+            ext_inputs = {"hmacCreateSecret": True}
+            attestation = ctap.make_credential(
+                client_data_hash=client_data_hash,
+                rp={"id": RP_ID, "name": "OTP-Local"},
+                user={"id": user_id, "name": account, "displayName": account},
+                key_params=[{"type": "public-key", "alg": -7}],
+                extensions=ext_inputs,
+                pin_uv_param=pin_auth,
+            )
+
+            auth_data = attestation.auth_data
+            cred_id = auth_data.credential_data.credential_id
+            aaguid = auth_data.credential_data.aaguid.hex()
 
             assertion = ctap.get_assertion(
                 rp_id=RP_ID,
@@ -307,30 +318,117 @@ def fido2_code(
             )
             hmac_output = assertion.auth_data.extensions.get("hmac-secret")
             if not hmac_output:
-                raise AppError(5)
+                raise AppError(4)
     except AppError:
         raise
     except Exception as exc:
-        raise AppError(5) from exc
+        raise AppError(4) from exc
 
     kdk = _derive_kdk(hmac_output)
     aes = AESGCM(kdk)
+    nonce = os.urandom(12)
+    ciphertext = aes.encrypt(nonce, secret.strip().encode("utf-8"), account.encode("utf-8"))
 
-    try:
-        plaintext_bytes = aes.decrypt(nonce, ciphertext, account.encode("utf-8"))
-    except Exception:
-        raise AppError(5) from None
+    backup_tokens = entry.setdefault("backup_tokens", [])
+    backup_tokens.append(
+        {
+            "credential_id": cred_id.hex() if isinstance(cred_id, bytes) else str(cred_id),
+            "nonce": nonce.hex(),
+            "ciphertext": ciphertext.hex(),
+            "aaguid": str(aaguid),
+            "created_at": time.time(),
+        }
+    )
+    _write_vault(vault, env)
 
-    raw_secret = plaintext_bytes.decode("utf-8", errors="replace").strip()
-    try:
-        params = OtpParameters(secret=raw_secret, account=account)
-        code, _ = generate_totp_code(params, timestamp=timestamp)
-        return code
-    finally:
-        raw_secret = ""
-        # Overwrite decrypted secret buffer in memory
-        c_buf = (ctypes.c_char * len(plaintext_bytes)).from_buffer(bytearray(plaintext_bytes))
-        ctypes.memset(ctypes.addressof(c_buf), 0, len(plaintext_bytes))
+
+def fido2_code(
+    account: str,
+    env: dict[str, str],
+    pin: str | None = None,
+    touch_callback: Callable[[], None] | None = None,
+    timestamp: float | None = None,
+) -> str:
+    """Retrieve FIDO2-protected TOTP code using primary or backup physical key upon touch."""
+    if not account or not LABEL.fullmatch(account):
+        raise AppError(2)
+    if not HAS_FIDO2 or not HAS_CRYPTOGRAPHY:
+        raise AppError(3)
+
+    vault = _read_vault(env)
+    entry = vault.get("accounts", {}).get(account)
+    if not entry:
+        raise AppError(4)
+
+    salt = bytes.fromhex(entry["salt"])
+
+    candidates = [
+        {
+            "credential_id": entry["credential_id"],
+            "nonce": entry["nonce"],
+            "ciphertext": entry["ciphertext"],
+        }
+    ]
+    for b in entry.get("backup_tokens", []):
+        candidates.append(b)
+
+    dev, ctap = get_ctap2_device()
+
+    if touch_callback:
+        touch_callback()
+
+    client_data_hash = hashlib.sha256(
+        f"OTP-Local Code Generation: {account}".encode("utf-8")
+    ).digest()
+
+    last_error = None
+    for cand in candidates:
+        cred_id = bytes.fromhex(cand["credential_id"])
+        nonce = bytes.fromhex(cand["nonce"])
+        ciphertext = bytes.fromhex(cand["ciphertext"])
+        try:
+            if hasattr(dev, "mock_assertion"):
+                hmac_output = dev.mock_assertion(cred_id=cred_id, salt=salt, pin=pin)
+            else:
+                pin_auth = None
+                if pin and hasattr(ctap, "info") and ctap.info.options.get("clientPin"):
+                    client_pin = ClientPin(ctap)
+                    pin_auth = client_pin.get_pin_token(pin)
+
+                assertion = ctap.get_assertion(
+                    rp_id=RP_ID,
+                    client_data_hash=client_data_hash,
+                    allow_list=[{"type": "public-key", "id": cred_id}],
+                    extensions={"hmac-secret": HMACGetSecretInput(salt1=salt)},
+                    pin_uv_param=pin_auth,
+                )
+                hmac_output = assertion.auth_data.extensions.get("hmac-secret")
+                if not hmac_output:
+                    continue
+
+            kdk = _derive_kdk(hmac_output)
+            aes = AESGCM(kdk)
+            plaintext_bytes = aes.decrypt(nonce, ciphertext, account.encode("utf-8"))
+            raw_secret = plaintext_bytes.decode("utf-8", errors="replace").strip()
+            try:
+                params = OtpParameters(secret=raw_secret, account=account)
+                code, _ = generate_totp_code(params, timestamp=timestamp)
+                return code
+            finally:
+                raw_secret = ""
+                c_buf = (ctypes.c_char * len(plaintext_bytes)).from_buffer(
+                    bytearray(plaintext_bytes)
+                )
+                ctypes.memset(ctypes.addressof(c_buf), 0, len(plaintext_bytes))
+        except AppError as exc:
+            last_error = exc
+            continue
+        except Exception:
+            continue
+
+    if last_error:
+        raise last_error
+    raise AppError(5)
 
 
 def fido2_delete(account: str, env: dict[str, str]) -> None:
