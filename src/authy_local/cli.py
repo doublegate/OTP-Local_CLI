@@ -117,6 +117,8 @@ def parser() -> Parser:
                 "dpapi",
                 "fido2",
                 "bitwarden",
+                "keepass",
+                "federated",
             ),
             default="onepassword",
         )
@@ -411,6 +413,29 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                     finally:
                         confirmation = ""
                 bitwarden.bitwarden_enroll(title, secret, env)
+            elif args.backend == "keepass":
+                from .backends import keepass
+
+                title = getattr(args, "title", None) or args.account
+                if not title:
+                    raise AppError(2)
+                if not secret:
+                    import warnings
+                    from getpass import GetPassWarning, getpass
+
+                    confirmation = ""
+                    try:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("error", GetPassWarning)
+                            secret = getpass("Base32 secret or TOTP URI (hidden): ")
+                            confirmation = getpass("Repeat enrollment value (hidden): ")
+                        if secret != confirmation:
+                            raise AppError(2)
+                    except GetPassWarning:
+                        raise AppError(3) from None
+                    finally:
+                        confirmation = ""
+                keepass.keepass_enroll(title, secret, env)
             else:
                 from .backends import local
 
@@ -479,8 +504,27 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 "dpapi",
                 "fido2",
                 "bitwarden",
+                "keepass",
+                "federated",
             ):
-                if args.backend == "bitwarden":
+                if args.backend == "federated":
+                    from .federation import FederatedResolver
+
+                    resolver = FederatedResolver()
+                    tokens = resolver.resolve_all(env)
+                    rows = [(t.key, t.display_label) for t in tokens]
+                    selected_id = launch_picker(rows, env, launcher=args.launcher)
+                    tok = next((t for t in tokens if t.key == selected_id), None)
+                    if not tok:
+                        raise AppError(4)
+                    code = resolver.retrieve_code(tok, env)
+                elif args.backend == "keepass":
+                    from .backends import keepass
+
+                    rows = keepass.keepass_records(env)
+                    selected_id = launch_picker(rows, env, launcher=args.launcher)
+                    code = keepass.keepass_code(selected_id, env)
+                elif args.backend == "bitwarden":
                     from .backends import bitwarden
 
                     rows = bitwarden.bitwarden_records(env)
@@ -943,10 +987,50 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
         env = dict(os.environ)
         if copying:
             clipboard_capability(env)
-        if args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2", "bitwarden"):
+        if args.backend in (
+            "yubikey",
+            "tpm2-totp",
+            "keychain",
+            "dpapi",
+            "fido2",
+            "bitwarden",
+            "keepass",
+            "federated",
+        ):
             from .interaction import choose_records
 
-            if args.backend == "bitwarden":
+            if args.backend == "federated":
+                from .federation import FederatedResolver
+
+                resolver = FederatedResolver()
+                if args.command == "select":
+                    tokens = resolver.resolve_all(env)
+                    rows = [(t.key, t.display_label) for t in tokens]
+                    selected_id = choose_records(rows, env)
+                    tok = next((t for t in tokens if t.key == selected_id), None)
+                    if not tok:
+                        raise AppError(4)
+                    code = resolver.retrieve_code(tok, env)
+                else:
+                    target = getattr(args, "item", None) or args.account
+                    if not target:
+                        raise AppError(2)
+                    tokens = resolver.search(target, env)
+                    if not tokens:
+                        raise AppError(4)
+                    code = resolver.retrieve_code(tokens[0], env)
+            elif args.backend == "keepass":
+                from .backends import keepass
+
+                if args.command == "select":
+                    selected = choose_records(keepass.keepass_records(env), env)
+                    code = keepass.keepass_code(selected, env)
+                else:
+                    item_id_or_name = getattr(args, "item", None) or args.account
+                    if not item_id_or_name:
+                        raise AppError(2)
+                    code = keepass.keepass_code(item_id_or_name, env)
+            elif args.backend == "bitwarden":
                 from .backends import bitwarden
 
                 if args.command == "select":

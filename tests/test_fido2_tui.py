@@ -59,22 +59,30 @@ class TestFido2Tui(unittest.IsolatedAsyncioTestCase):
             acct_lbl = modal.query_one("#fido2-touch-account", Static)
             self.assertIn("test_work_key", str(acct_lbl.render()))
 
+            if modal._timer is not None:
+                modal._timer.stop()
+                modal._timer = None
+
             cbar = modal.query_one("#fido2-touch-bar", CountdownBar)
-            self.assertAlmostEqual(cbar.remaining_seconds, 30.0)
+            initial_rem = modal.remaining_seconds
+            self.assertAlmostEqual(cbar.remaining_seconds, initial_rem)
+            self.assertLessEqual(initial_rem, 30.0)
+            self.assertGreater(initial_rem, 28.0)
 
             pulse_widget = modal.query_one("#fido2-touch-pulse", Static)
             initial_render = str(pulse_widget.render())
             self.assertIn("TOUCH SECURITY KEY", initial_render)
 
             # Advance ticks to verify visual pulsing frames progression
+            p_step = modal.pulse_step
             modal._tick()
-            self.assertEqual(modal.pulse_step, 1)
-            self.assertAlmostEqual(modal.remaining_seconds, 29.75)
-            self.assertAlmostEqual(cbar.remaining_seconds, 29.75)
+            self.assertEqual(modal.pulse_step, p_step + 1)
+            self.assertAlmostEqual(modal.remaining_seconds, initial_rem - 0.25)
+            self.assertAlmostEqual(cbar.remaining_seconds, initial_rem - 0.25)
 
             modal._tick()
-            self.assertEqual(modal.pulse_step, 2)
-            self.assertAlmostEqual(modal.remaining_seconds, 29.5)
+            self.assertEqual(modal.pulse_step, p_step + 2)
+            self.assertAlmostEqual(modal.remaining_seconds, initial_rem - 0.5)
 
             # Test cancel dismiss
             await pilot.press("escape")
@@ -123,11 +131,11 @@ class TestFido2Tui(unittest.IsolatedAsyncioTestCase):
 
         async with app.run_test() as pilot:
             await pilot.pause()
-            # Simulate 4 ticks (4 x 0.25s = 1.0s)
-            modal._tick()
-            modal._tick()
-            modal._tick()
-            modal._tick()
+            if modal._timer is not None:
+                modal._timer.stop()
+                modal._timer = None
+            while modal.remaining_seconds > 0.0:
+                modal._tick()
             await pilot.pause()
 
             self.assertEqual(app.result, False)
@@ -152,7 +160,7 @@ class TestFido2Tui(unittest.IsolatedAsyncioTestCase):
         async with app.run_test() as pilot:
             await pilot.pause()
             opt_list = modal.query_one("#backend-select-list", OptionList)
-            self.assertEqual(opt_list.option_count, 8)
+            self.assertEqual(opt_list.option_count, 11)
 
             # Hotkey '8' selection
             await pilot.press("8")

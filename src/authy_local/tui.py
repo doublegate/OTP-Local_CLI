@@ -2853,6 +2853,8 @@ class BackendSelectModal(ModalScreen[str | None]):
         Binding("7", "select_7", "dpapi", show=False),
         Binding("8", "select_8", "fido2", show=False),
         Binding("9", "select_9", "bitwarden", show=False),
+        Binding("k", "select_k", "keepass", show=False),
+        Binding("0", "select_0", "federated", show=False),
     ]
 
     def __init__(self, current_backend: str = "onepassword", **kwargs) -> None:
@@ -2872,6 +2874,8 @@ class BackendSelectModal(ModalScreen[str | None]):
                 Option("7  Windows DPAPI (dpapi)", id="opt-dpapi"),
                 Option("8  FIDO2 Security Key (fido2)", id="opt-fido2"),
                 Option("9  Bitwarden Vault (bitwarden)", id="opt-bitwarden"),
+                Option("K  KeePassXC Database (keepass)", id="opt-keepass"),
+                Option("0  All Vaults (Federated Multi-Vault) [federated]", id="opt-federated"),
                 id="backend-select-list",
             )
             with Horizontal(id="backend-button-bar"):
@@ -2890,6 +2894,8 @@ class BackendSelectModal(ModalScreen[str | None]):
             "dpapi": 6,
             "fido2": 7,
             "bitwarden": 8,
+            "keepass": 9,
+            "federated": 10,
         }
         opt_list.highlighted = mapping.get(self.current_backend, 0)
         opt_list.focus()
@@ -2921,6 +2927,12 @@ class BackendSelectModal(ModalScreen[str | None]):
     def action_select_9(self) -> None:
         self._choose("bitwarden")
 
+    def action_select_k(self) -> None:
+        self._choose("keepass")
+
+    def action_select_0(self) -> None:
+        self._choose("federated")
+
     def action_cancel_select(self) -> None:
         self.dismiss(None)
 
@@ -2936,6 +2948,8 @@ class BackendSelectModal(ModalScreen[str | None]):
             "dpapi",
             "fido2",
             "bitwarden",
+            "keepass",
+            "federated",
         ]
         if event.option_index is not None and 0 <= event.option_index < len(backends):
             self._choose(backends[event.option_index])
@@ -2953,6 +2967,8 @@ class BackendSelectModal(ModalScreen[str | None]):
             "dpapi",
             "fido2",
             "bitwarden",
+            "keepass",
+            "federated",
         ]
         if opt_list.highlighted is not None and 0 <= opt_list.highlighted < len(backends):
             self._choose(backends[opt_list.highlighted])
@@ -3339,6 +3355,11 @@ class AddOtpModal(ModalScreen[None]):
                         value=(self.current_backend == "bitwarden"),
                         id="chk-bitwarden",
                     )
+                    yield Checkbox(
+                        "KeePassXC Database",
+                        value=(self.current_backend == "keepass"),
+                        id="chk-keepass",
+                    )
 
                 yield Static("", id="add-otp-status-banner")
 
@@ -3542,8 +3563,20 @@ class AddOtpModal(ModalScreen[None]):
         save_dpapi = self.query_one("#chk-dpapi", Checkbox).value
         save_fido2 = self.query_one("#chk-fido2", Checkbox).value
         save_bw = self.query_one("#chk-bitwarden", Checkbox).value
+        save_kp = self.query_one("#chk-keepass", Checkbox).value
 
-        if not any((save_op, save_pass, save_tpm, save_keychain, save_dpapi, save_fido2, save_bw)):
+        if not any(
+            (
+                save_op,
+                save_pass,
+                save_tpm,
+                save_keychain,
+                save_dpapi,
+                save_fido2,
+                save_bw,
+                save_kp,
+            )
+        ):
             self._set_status("[red]Error: Select at least one target backend storage.[/]")
             return
 
@@ -3708,6 +3741,17 @@ class AddOtpModal(ModalScreen[None]):
                 except Exception as exc:
                     errors.append(f"Bitwarden: {exc}")
 
+            # 8. KeePassXC Database
+            if save_kp:
+                try:
+                    from .backends import keepass
+
+                    raw_acc = title or "default"
+                    await asyncio.to_thread(keepass.keepass_enroll, raw_acc, uri, env)
+                    enrolled.append("KeePassXC")
+                except Exception as exc:
+                    errors.append(f"KeePassXC: {exc}")
+
             if errors:
                 err_text = "; ".join(errors)
                 self._set_status(f"[red]Enrollment errors: {err_text}[/]")
@@ -3856,26 +3900,42 @@ class Fido2TouchModal(ModalScreen[bool]):
             if self._timer is not None:
                 self._timer.stop()
                 self._timer = None
-            self.dismiss(False)
+            if self.is_mounted:
+                try:
+                    self.dismiss(False)
+                except Exception:
+                    pass
 
     def action_cancel_touch(self) -> None:
         if self._timer is not None:
             self._timer.stop()
             self._timer = None
-        self.dismiss(False)
+        if self.is_mounted:
+            try:
+                self.dismiss(False)
+            except Exception:
+                pass
 
     def action_simulate_touch(self) -> None:
         if self._timer is not None:
             self._timer.stop()
             self._timer = None
-        self.dismiss(True)
+        if self.is_mounted:
+            try:
+                self.dismiss(True)
+            except Exception:
+                pass
 
     def touch_received(self) -> None:
         """Invoked programmatically or via device callback upon touch confirmation."""
         if self._timer is not None:
             self._timer.stop()
             self._timer = None
-        self.dismiss(True)
+        if self.is_mounted:
+            try:
+                self.dismiss(True)
+            except Exception:
+                pass
 
     @on(Button.Pressed, "#btn-simulate-touch")
     def on_touch_pressed(self) -> None:

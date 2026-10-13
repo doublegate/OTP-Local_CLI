@@ -1,6 +1,6 @@
 # Phase 10: Enterprise Multi-Vault Federation and Open Formats
 
-Status: Planned for release v1.5.0. See [delivery index](README.md) and [ROADMAP.md](../ROADMAP.md).
+Status: Complete in release v1.5.0. See [delivery index](README.md) and [ROADMAP.md](../ROADMAP.md).
 
 ## Objective
 

@@ -57,6 +57,16 @@ def records(backend: str, profile: dict[str, str], env: dict[str, str]) -> list[
         from .backends import bitwarden
 
         return bitwarden.bitwarden_records(env)
+    if backend == "keepass":
+        from .backends import keepass
+
+        return keepass.keepass_records(env)
+    if backend == "federated":
+        from .federation import FederatedResolver
+
+        resolver = FederatedResolver()
+        tokens = resolver.resolve_all(env)
+        return [(t.key, t.display_label) for t in tokens]
     return local.records(_local_scope(backend, profile), env)
 
 
@@ -68,7 +78,16 @@ def arguments(backend: str, profile: dict[str, str], key: str) -> list[str]:
         account, vault = _values(profile, ("account", "vault"))
         Scope(key, account, vault)
         return [key, "--account", account, "--vault", vault]
-    if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2", "bitwarden"):
+    if backend in (
+        "yubikey",
+        "tpm2-totp",
+        "keychain",
+        "dpapi",
+        "fido2",
+        "bitwarden",
+        "keepass",
+        "federated",
+    ):
         return ["--backend", backend, "--account", key]
     scope = _local_scope(backend, profile)
     if backend == "pass-otp":
@@ -134,6 +153,13 @@ def remove(backend: str, profile: dict[str, str], key: str, env: dict[str, str])
 
         deletion_audit.record(backend, Path(env["HOME"]) if env.get("HOME") else None)
         bitwarden.bitwarden_delete(key, env)
+        return
+    if backend == "keepass":
+        arguments(backend, profile, key)
+        from .backends import keepass
+
+        deletion_audit.record(backend, Path(env["HOME"]) if env.get("HOME") else None)
+        keepass.keepass_delete(key, env)
         return
     if backend not in {"pass-otp", "totpm"}:
         raise AppError(2)

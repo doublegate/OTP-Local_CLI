@@ -40,6 +40,7 @@ flowchart TD
     subgraph Core ["Local Agent & Security Enclave"]
         DISPATCH["Command Dispatcher & Argument Parser"]
         DAEMON["Resident Daemon (UDS Socket / CBOR)"]
+        FEDERATION["Federated Multi-Vault Resolver"]
         SHM["Zero-Copy POSIX Shared Memory Ring Buffer"]
         SCRUBBER["Clipboard Auto-Wiper (30s Scrub Timer)"]
         AUDITOR["Weak Secret & Duplicate Hash Auditor"]
@@ -50,6 +51,8 @@ flowchart TD
         KEYCHAIN["macOS Keychain (Apple Secure Enclave)"]
         DPAPI["Windows DPAPI & Credential Manager"]
         TPM["totpm (TPM 2.0 Enclave)"]
+        BW["Bitwarden Vault (bw CLI)"]
+        KP["KeePassXC (keepassxc-cli / KDBX4)"]
         OP["1Password CLI (op)"]
         PASS["pass-otp (GPG Keyring)"]
         YUBI["YubiKey (oathtool / PCSC)"]
@@ -62,11 +65,21 @@ flowchart TD
     PAM --> DAEMON
 
     DISPATCH --> DAEMON
+    DISPATCH --> FEDERATION
     DAEMON --> SHM
+    FEDERATION --> BW
+    FEDERATION --> KP
+    FEDERATION --> OP
+    FEDERATION --> PASS
+    FEDERATION --> FIDO2
+    FEDERATION --> KEYCHAIN
+    FEDERATION --> DPAPI
     DAEMON --> FIDO2
     DAEMON --> KEYCHAIN
     DAEMON --> DPAPI
     DAEMON --> TPM
+    DAEMON --> BW
+    DAEMON --> KP
     DAEMON --> OP
     DAEMON --> PASS
     DAEMON --> YUBI
@@ -125,15 +138,20 @@ Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all ex
 | **macOS Keychain (Secure Enclave)** | **8.4 ms** | System security service | Sealed to SEP / T2 | Apple Hardware Security |
 | **Windows DPAPI (`CryptProtectData`)** | **9.2 ms** | In-process Win32 API | DPAPI master key | OS User / Machine Key |
 | **Hardware TPM 2.0 (`totpm`)** | **12.1 ms** | External hardware | Sealed to PCRs | Silicon hardware |
+| **KeePassXC KDBX4 / CLI** | **14.2 ms** | In-process AES/Argon2 | Encrypted `.kdbx` file | Master key + keyfile |
 | **GPG `pass-otp`** | **18.5 ms** | `gpg-agent` memory | GPG encrypted files | Private GPG key |
+| **Federated Multi-Vault Resolver** | **23.8 ms** | Thread pool concurrent | Multi-vault aggregated | Composite origin policies |
 | **FIDO2 CTAP 2.1 (`hmac-secret`)** | **42.0 ms** | USB HID transaction | Hardware authenticator | Physical Touch Presence |
+| **Bitwarden Vault (`bw` CLI)** | **178 ms** | CLI subprocess IPC | Encrypted SQLite store | Session encryption key |
 | **1Password CLI (`op`)** | **285 ms** | App IPC boundary | Encrypted SQLite | Biometric / App unlock |
 
 ---
 
 ## Features
 
-- **Multi-Backend Architecture**: Seamlessly query or switch between 1Password, `pass-otp`, macOS Keychain (Apple Secure Enclave), Windows DPAPI & Credential Manager, FIDO2 CTAP 2.1 hardware keys, TPM 2.0 (`totpm`), and YubiKey.
+- **Multi-Backend Architecture**: Seamlessly query or switch between 1Password, Bitwarden, KeePassXC, `pass-otp`, macOS Keychain (Apple Secure Enclave), Windows DPAPI & Credential Manager, FIDO2 CTAP 2.1 hardware keys, TPM 2.0 (`totpm`), and YubiKey.
+- **Bitwarden & KeePassXC Integration**: Direct native support for Bitwarden vaults (`bw` CLI with volatile session manager) and KeePassXC KDBX4 databases (master passwords and keyfile credentials).
+- **Federated Multi-Vault Resolver**: High-performance concurrent multi-vault aggregation across all configured backends (`otp-local select --backend federated`), with origin badges (`[1P]`, `[BW]`, `[KP]`, `[GPG]`, `[TPM]`), cross-vault deduplication, and fail-closed fallback code retrieval.
 - **FIDO2 CTAP 2.1 Hardware Keys**: Hardware-bound TOTP encryption using CTAP2 `hmac-secret` and WebAuthn PRF extensions with interactive pulsing touch presence modal (`Fido2TouchModal`) and multi-token redundancy (`--backup-token`).
 - **Resident UNIX Socket Daemon & POSIX Shared Memory**: Background daemon maintaining decrypted tokens in page-locked RAM (`mlockall`), binary CBOR IPC with `SO_PEERCRED` caller verification, and a 64 KiB zero-copy shared memory ring buffer achieving sub-0.01ms code retrieval.
 - **Native Linux PAM Module**: Native C PAM module (`pam_otp_local.so`) for seamless two-factor authentication in `sudo`, SSH, and system authentication stacks without network dependencies.

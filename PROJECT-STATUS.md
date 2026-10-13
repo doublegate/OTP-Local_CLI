@@ -46,6 +46,7 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | T-AUTH-007: FIDO2 CTAP2.1 & Touch Presence integration | Complete | FIDO2 CTAP 2.1 hardware backend, multi-token redundancy, Fido2TouchModal, and TUI integration pass |
 | T-AUTH-008: High-speed daemon IPC & shared memory | Complete | S-AUTH-9.1 complete; resident daemon, CBOR IPC, and POSIX SHM ring buffer pass |
 | T-AUTH-009: Linux PAM integration & v1.4.0 release | Complete | S-AUTH-9.2 complete; native C PAM module, Makefile, and doctor --pam pass |
+| T-AUTH-010: Bitwarden & KeePassXC Multi-Vault Federation | Complete | S-AUTH-10.1 and S-AUTH-10.2 complete; Bitwarden, KeePassXC, and FederatedResolver pass |
 
 ## Phase and capability matrix
 
@@ -61,16 +62,17 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | 7 Windows & shells | Complete | Sprints 7.1 and 7.2 complete; Windows DPAPI, PowerShell, NuShell, and WSL2 IPC bridge gates pass |
 | 8 FIDO2 hardware keys | Complete | Sprints 8.1 and 8.2 complete; CTAP 2.1 HMAC-secret, multi-token redundancy, Fido2TouchModal, and TUI gates pass |
 | 9 Daemon IPC & PAM | Complete | Sprints 9.1 and 9.2 complete; resident daemon, CBOR IPC, SHM ring buffer, and Linux PAM module pass |
+| 10 Multi-Vault Federation | Complete | Sprints 10.1 and 10.2 complete; Bitwarden, KeePassXC, and multi-vault federation pass |
 
-Package version is 1.4.0.
+Package version is 1.5.0.
 
 ## Metrics and timeline
 
 | Metric | Snapshot | Source |
 |---|---|---|
 | Derived specification | Fourteen numbered guides and eight ADRs | docs/00-index.md |
-| Delivery plan | Nine phases; nineteen sprints; 68 completed tasks | to-dos/README.md and sprint files |
-| Software/test/release | v1.4.0 (Phase 9 complete) / 799 tests pass / 100% pass rate | tests/ |
+| Delivery plan | Ten phases; twenty-one sprints; 72 completed tasks | to-dos/README.md and sprint files |
+| Software/test/release | v1.5.0 (Phase 10 complete) / 851 tests pass / 100% pass rate | tests/ |
 | Coverage | 94% aggregate; validator/1Password adapter 100% | Branch-inclusive coverage report; blocking floors 90% / 100% |
 | Account outcomes | Pilot: 1 migrated / 0 blocked / 0 pending; full inventory unknown | Checkpoint B operator attestation; no private inventory read |
 | Documentation validation | Authored files; links, task IDs and lint pass; reference hash unchanged | docs/00-index.md |

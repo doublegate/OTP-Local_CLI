@@ -223,7 +223,7 @@ def bitwarden_code(
     if not bw:
         raise AppError(3)
 
-    step = current_time_step(30)
+    step = current_time_step(30, now=timestamp)
     cached = get_cached_totp("bitwarden", item_id_or_name, step)
     if cached is not None:
         return cached

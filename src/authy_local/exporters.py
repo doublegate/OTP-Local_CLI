@@ -238,6 +238,10 @@ def collect_backend_tokens(
         from .backends import bitwarden
 
         return bitwarden.collect_tokens(env)
+    if backend == "keepass":
+        from .backends import keepass
+
+        return keepass.collect_tokens(env)
     if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
         return []
 

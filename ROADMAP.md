@@ -1,8 +1,7 @@
 # Delivery roadmap
 
-Status: Software complete and formally released at v1.0.0. All development phases
-(0–6) complete; all quality gates verified with 699 passed tests. Progress belongs in
-[PROJECT-STATUS.md](PROJECT-STATUS.md); task checkboxes close only when
+Status: Formally released at v1.5.0. Phases 0–10 complete; all quality gates verified.
+Progress belongs in [PROJECT-STATUS.md](PROJECT-STATUS.md); task checkboxes close only when
 their evidence exists. [Requirements](docs/specs/01-requirements.md) map acceptance to
 sprints. [Plan index](to-dos/README.md) links the complete phase/sprint documents.
 

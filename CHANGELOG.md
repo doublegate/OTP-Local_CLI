@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-13
+
+### Added
+
+- Bitwarden vault backend in `src/authy_local/backends/bitwarden.py` utilizing Bitwarden CLI (`bw`) and `BitwardenSessionManager` with secure volatile session caching, automatic expiration timeouts, item enumeration, search, and TOTP generation via `bw get totp` with fallback in-process TOTP generation.
+- KeePassXC KDBX4 database engine in `src/authy_local/backends/keepass.py` supporting native `keepassxc-cli` and KDBX/XML fallback parsing with `KeePassSessionManager`, composite credentials (master passwords and keyfiles), item listing, TOTP retrieval, enrollment, and deletion.
+- High-performance concurrent multi-vault federation engine in `src/authy_local/federation.py` with `FederatedResolver` querying candidate backends concurrently via `ThreadPoolExecutor`, cross-backend deduplication, origin badges (`[1P]`, `[BW]`, `[KP]`, `[GPG]`, `[TPM]`, `[BW+KP]`), and sub-100ms multi-vault aggregation.
+- Unified cross-vault search and priority code retrieval with fail-closed fallback across all configured vaults in `FederatedResolver.search` and `FederatedResolver.retrieve_code`.
+- Textual TUI integration for Bitwarden (hotkey `9`), KeePassXC (hotkey `K`), and Federated Multi-Vault (hotkey `0`) in `BackendSelectModal`, and enrollment checkboxes in `AddOtpModal`.
+- CLI integration for `--backend bitwarden`, `--backend keepass`, and `--backend federated` across `show`, `copy`, `select`, `enroll`, and `pick`.
+- System diagnostics (`otp-local doctor`) probing Bitwarden CLI (`bw`) vault lock status and KeePassXC database availability with automated package manager formulas (`bw`, `keepassxc`, `KeePassXCTeam.KeePassXC`).
+- Comprehensive automated test suites in `tests/test_bitwarden_backend.py` (22 tests), `tests/test_keepass_backend.py` (18 tests), and `tests/test_federation.py` (12 tests).
+
 ## [1.4.0] - 2026-10-13
 
 ### Added

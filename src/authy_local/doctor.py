@@ -93,10 +93,11 @@ def report(env: dict[str, str]) -> dict:
     else:
         result["tpm-device"] = {"state": "missing"}
 
-    from .backends import bitwarden, dpapi, fido2, keychain
+    from .backends import bitwarden, dpapi, fido2, keepass, keychain
 
     result["fido2"] = fido2.probe(env)
     result["bitwarden"] = bitwarden.probe(env)
+    result["keepass"] = keepass.probe(env)
 
     if sys.platform == "darwin":
         result["keychain"] = keychain.probe(env)
@@ -187,6 +188,7 @@ BREW_CAPABILITY_MAP = {
     "qrencode": "qrencode",
     "pinentry": "pinentry-mac",
     "bitwarden": "bitwarden-cli",
+    "keepass": "keepassxc",
 }
 
 WINGET_CAPABILITY_MAP = {
@@ -197,6 +199,7 @@ WINGET_CAPABILITY_MAP = {
     "fzf": "junegunn.fzf",
     "qrencode": "StefanHolek.qrencode",
     "bitwarden": "Bitwarden.CLI",
+    "keepass": "KeePassXCTeam.KeePassXC",
 }
 
 SCOOP_CAPABILITY_MAP = {
@@ -208,6 +211,7 @@ SCOOP_CAPABILITY_MAP = {
     "fzf": "fzf",
     "qrencode": "qrencode",
     "bitwarden": "bw",
+    "keepass": "keepassxc",
 }
 
 
