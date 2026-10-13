@@ -172,6 +172,36 @@ otp-local doctor
 
 ---
 
+## Comparison with Similar & Comparable Tools
+
+The following table contrasts `OTP-Local CLI` against mainstream open-source CLI tools, official vendor utilities, and legacy authenticators:
+
+| Feature / Dimension | **OTP-Local CLI** | **1Password CLI (`op`)** | **pass-otp** | **totp-cli** | **termotp** | **ykman oath** | **oathtool** | **Authy Desktop** |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Primary Interface** | TUI (Textual) + CLI | CLI | CLI (`pass`) | CLI | TUI + CLI | CLI | CLI | GUI App |
+| **Storage Architecture** | **Zero-Disk-Storage** (RAM only) | Cloud Vault + Local Cache | Encrypted GPG Files | Encrypted SQLite / File | Encrypted Phone Backup | Hardware Key Chip | None (Stateless argv) | Cloud Database |
+| **Interactive Dashboard** | **Yes** (live bars, hotkeys) | No | No (3rd party UIs) | No | Yes (Fuzzy finder) | No | No | Yes (GUI only) |
+| **1Password Integration** | **Native** (`op` backend) | Native | No | No | No | No | No | No |
+| **Hardware TPM2 Support** | **Native** (PCR enclaves) | No | No | No | No | No | No | No |
+| **YubiKey OATH Support** | **Native** (`ykman` bridge) | No | Via GPG smartcard | No | No | Native | No | No |
+| **pass-otp / totpm Store** | **Native** | No | Native | No | No | No | No | No |
+| **Clipboard Auto-Wiper** | **Yes** (Wayland + X11, 30s) | No | Optional (`-c`) | No | No | No | No | No |
+| **Session Agent Daemon** | **Yes** (RAM memory-locked) | Background daemon | gpg-agent | No | No | No | No | Proprietary sync |
+| **Security Hygiene Auditor**| **Yes** (RFC rules SEC-001..4)| No | No | No | No | No | No | No |
+| **Terminal QR Rendering** | **Yes** (`qrencode` UTF-8) | No | Optional (`-q`) | No | No | No | No | No |
+| **License / Freedom** | **MIT (Open Source)** | Proprietary (Paid sub) | GPL-2.0 (Open Source) | MIT (Open Source) | GPL-3.0 (Open Source) | Apache-2.0 | GPL-3.0 | Proprietary (Discontinued)|
+
+### Detailed Architectural Distinctions
+
+- **Compared to 1Password CLI (`op`)**: While `op` requires terminal operators to invoke individual subcommands and pipe output through shell utilities, `OTP-Local CLI` wraps `op` in a high-speed Textual dashboard with real-time countdown progress bars, live fuzzy filtering, and clipboard auto-wiping, while also allowing unified fallback to hardware TPM2 or local GPG stores without credential duplication.
+- **Compared to `pass-otp`**: Standard `pass-otp` is tightly tied to the ZX2C4 password store on disk and lacks a unified multi-enclave model or a modern terminal UI. `OTP-Local CLI` can inspect and audit `pass-otp` stores while providing interactive TUI navigation and multi-backend switching.
+- **Compared to `totp-cli` and `termotp`**: Tools like `totp-cli` maintain an on-disk encrypted database requiring a master password, whereas `OTP-Local CLI` enforces strict zero-disk-storage where secrets remain confined to hardware enclaves or existing authenticated vaults. `termotp` relies on static mobile exports (Aegis), whereas `OTP-Local CLI` interfaces with live system enclaves and password engines.
+- **Compared to `oathtool`**: `oathtool` requires passing raw base32 secrets via command-line arguments, which exposes unencrypted keys in the system process table (`/proc/PID/cmdline`) and shell histories (`~/.bash_history`). `OTP-Local CLI` passes secrets via secure stdin pipes, subreaper process trees, and memory-locked buffers.
+- **Compared to `ykman oath`**: YubiKey Manager is limited strictly to physical YubiKey hardware tokens. `OTP-Local CLI` bridges YubiKey hardware, TPM 2.0 chips, 1Password, and local encrypted stores under a single, unified interface and uniform keybindings.
+- **Compared to Legacy Twilio Authy Desktop**: Following Twilio's formal discontinuation of Authy Desktop in August 2024, `OTP-Local CLI` provides a completely offline, zero-telemetry, developer-friendly terminal companion that liberates users from proprietary cloud lock-in.
+
+---
+
 ## Quick Start CLI Usage
 
 ### 1. Run Diagnostic Health Check

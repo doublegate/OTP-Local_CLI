@@ -112,10 +112,25 @@ class TestAuditor(unittest.TestCase):
 
 class TestAuditCLI(unittest.TestCase):
     def test_audit_json_output(self):
+        from unittest.mock import patch
+
         out = io.StringIO()
         err = io.StringIO()
-        # Audit pass-otp (with empty store profile)
-        status = main(["audit", "--backend", "pass-otp", "--json"], stdout=out, stderr=err)
+        with patch("authy_local.exporters.collect_backend_tokens", return_value=[]):
+            status = main(
+                [
+                    "audit",
+                    "--backend",
+                    "pass-otp",
+                    "--store",
+                    "/tmp/store",
+                    "--key-home",
+                    "/tmp/keys",
+                    "--json",
+                ],
+                stdout=out,
+                stderr=err,
+            )
         self.assertEqual(status, 0)
         data = json.loads(out.getvalue())
         self.assertEqual(data["backend"], "pass-otp")

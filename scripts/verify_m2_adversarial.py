@@ -152,9 +152,10 @@ def run_test_missing_transitive_dependency() -> tuple[bool, str]:
         wheels_dir = isolated_dir / "wheels"
         wheels_dir.mkdir()
         # Copy only textual, omit rich, pygments, markdown-it-py, etc.
+        textual_whl = next((repo_root / "dist/wheels").glob("textual-*.whl"))
         shutil.copyfile(
-            repo_root / "dist/wheels/textual-8.2.8-py3-none-any.whl",
-            wheels_dir / "textual-8.2.8-py3-none-any.whl",
+            textual_whl,
+            wheels_dir / textual_whl.name,
         )
 
         old_cwd = os.getcwd()

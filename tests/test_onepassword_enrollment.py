@@ -103,47 +103,45 @@ class TestOnePasswordEnrollment(unittest.TestCase):
 
     def test_enroll_parameter_validation_and_command_failure(self) -> None:
         """Verify parameter bounds and non-zero exit codes fail closed."""
-        # Empty title
-        with self.assertRaises(AppError) as ctx:
-            onepassword.enroll(
-                account=self.account,
-                vault=self.vault,
-                title="   ",
-                otp_uri=self.uri,
-                env=self.env,
-            )
-        self.assertEqual(ctx.exception.exit_code, 2)
-
-        # Non-otpauth URI
-        with self.assertRaises(AppError) as ctx:
-            onepassword.enroll(
-                account=self.account,
-                vault=self.vault,
-                title=self.title,
-                otp_uri="http://invalid.uri",
-                env=self.env,
-            )
-        self.assertEqual(ctx.exception.exit_code, 2)
-
-        # Process failure returncode = 1
-        mock_fail = MagicMock()
-        mock_fail.returncode = 1
-        with (
-            patch(
-                "authy_local.backends.onepassword.probe",
-                return_value={"state": "available", "path": "/usr/bin/op"},
-            ),
-            patch("authy_local.backends.onepassword.run", return_value=mock_fail),
+        with patch(
+            "authy_local.backends.onepassword.probe",
+            return_value={"state": "available", "path": "/usr/bin/op"},
         ):
+            # Empty title
+            with self.assertRaises(AppError) as ctx:
+                onepassword.enroll(
+                    account=self.account,
+                    vault=self.vault,
+                    title="   ",
+                    otp_uri=self.uri,
+                    env=self.env,
+                )
+            self.assertEqual(ctx.exception.exit_code, 2)
+
+            # Non-otpauth URI
             with self.assertRaises(AppError) as ctx:
                 onepassword.enroll(
                     account=self.account,
                     vault=self.vault,
                     title=self.title,
-                    otp_uri=self.uri,
+                    otp_uri="http://invalid.uri",
                     env=self.env,
                 )
-            self.assertEqual(ctx.exception.exit_code, 4)
+            self.assertEqual(ctx.exception.exit_code, 2)
+
+            # Process failure returncode = 1
+            mock_fail = MagicMock()
+            mock_fail.returncode = 1
+            with patch("authy_local.backends.onepassword.run", return_value=mock_fail):
+                with self.assertRaises(AppError) as ctx:
+                    onepassword.enroll(
+                        account=self.account,
+                        vault=self.vault,
+                        title=self.title,
+                        otp_uri=self.uri,
+                        env=self.env,
+                    )
+                self.assertEqual(ctx.exception.exit_code, 4)
 
 
 if __name__ == "__main__":

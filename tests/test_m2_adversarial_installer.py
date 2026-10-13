@@ -156,9 +156,10 @@ class TestAdversarialOfflineWheelhouse(unittest.TestCase):
 
             wheels_dir = isolated_dir / "wheels"
             wheels_dir.mkdir()
+            textual_whl = next((repo_root / "dist/wheels").glob("textual-*.whl"))
             shutil.copyfile(
-                repo_root / "dist/wheels/textual-8.2.8-py3-none-any.whl",
-                wheels_dir / "textual-8.2.8-py3-none-any.whl",
+                textual_whl,
+                wheels_dir / textual_whl.name,
             )
 
             old_cwd = os.getcwd()

@@ -48,14 +48,20 @@ def _safe(path, home):
     return path
 
 
-def _paths(home, environment):
+def _paths(home, environment, *, ambient=False):
     roots = {}
     for key, default in (
         ("DATA", ".local/share"),
         ("CONFIG", ".config"),
         ("STATE", ".local/state"),
     ):
-        raw = environment.get(f"XDG_{key}_HOME") or str(home / default)
+        raw = environment.get(f"XDG_{key}_HOME")
+        if ambient and raw is not None:
+            raw_path = Path(raw)
+            if raw_path != home and home not in raw_path.parents:
+                raw = None
+        if raw is None:
+            raw = str(home / default)
         if not Path(raw).is_absolute():
             raise InstallError("XDG directories must be absolute.")
         roots[key] = _safe(Path(raw), home)
@@ -400,7 +406,9 @@ def operate(action, home, *, wheel=None, apply=False, backup=(), alias=False, en
     """Return a path-only plan/result. Apply is deliberately separate from preview."""
     home = Path(os.path.abspath(home))
     _safe(home, home)
-    roots = _paths(home, os.environ if environment is None else environment)
+    roots = _paths(
+        home, os.environ if environment is None else environment, ambient=environment is None
+    )
     state = _safe(roots["STATE"] / "authy-local", home)
     releases = _safe(roots["DATA"] / "authy-local/releases", home)
     launcher = _safe(home / ".local/bin/otp-local", home)

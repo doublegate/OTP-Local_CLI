@@ -69,7 +69,7 @@ def generate_banner() -> None:
     <!-- Pill 4: Sub-Millisecond -->
     <rect x="462" y="0" width="144" height="28" rx="14" fill="#2c2214" stroke="#d29922" stroke-width="1.2" />
     <circle cx="476" cy="14" r="4" fill="#e3b341" />
-    <text x="488" y="19" font-family="monospace" font-size="12" font-weight="600" fill="#f2cc60">0.05ms Generation</text>
+    <text x="488" y="19" font-family="monospace" font-size="12" font-weight="600" fill="#f2cc60">0.05ms Latency</text>
 
     <!-- Pill 5: v1.0.0 Final -->
     <rect x="618" y="0" width="100" height="28" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1.2" />

@@ -4,7 +4,7 @@ import subprocess
 import time
 import unittest
 
-from authy_local.cache import clear_cache, current_time_step, get_cached_totp, set_cached_totp
+from authy_local.cache import clear_cache, get_cached_totp, set_cached_totp
 from authy_local.tui_items import SearchIndex, fuzzy_filter
 from benchmarks import benchmark_capabilities as bm_cap
 from benchmarks import benchmark_search as bm_search
@@ -118,12 +118,13 @@ class BenchmarkAndSearchTests(unittest.TestCase):
 
     def test_totp_cache_window_speedup(self):
         clear_cache()
-        step = current_time_step(30)
-        set_cached_totp("onepassword", "item123", step, "123456")
+        step = 1000
+        fixed_now = 30005.0
+        set_cached_totp("onepassword", "item123", step, "123456", now=fixed_now)
 
         start = time.perf_counter()
         for _ in range(50_000):
-            code = get_cached_totp("onepassword", "item123", step)
+            code = get_cached_totp("onepassword", "item123", step, now=fixed_now)
         cached_lookup_time = (time.perf_counter() - start) / 50_000
 
         self.assertEqual(code, "123456")
