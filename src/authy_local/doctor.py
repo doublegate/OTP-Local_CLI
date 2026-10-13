@@ -93,7 +93,9 @@ def report(env: dict[str, str]) -> dict:
     else:
         result["tpm-device"] = {"state": "missing"}
 
-    from .backends import dpapi, keychain
+    from .backends import dpapi, fido2, keychain
+
+    result["fido2"] = fido2.probe(env)
 
     if sys.platform == "darwin":
         result["keychain"] = keychain.probe(env)

@@ -4,6 +4,10 @@
 
 ### Added
 
+- FIDO2 CTAP 2.1 hardware security key backend in `src/authy_local/backends/fido2.py` utilizing CTAP2 `hmac-secret` / WebAuthn PRF extensions and AES-256-GCM seed encryption.
+- Physical authenticator discovery, USB HID device enumeration, and optional user PIN verification for FIDO2 credentials.
+- In-memory cryptographic zeroization of decrypted FIDO2 TOTP secrets via `ctypes.memset`.
+- Integration of `--backend fido2` across CLI commands (`show`, `copy`, `select`, `enroll`, `pick`), deletion auditing, and `doctor` system diagnostics.
 - Native PowerShell 7+ integration module and completions in `shell/otp-local.ps1` with `Get-OtpCode`, `Copy-OtpCode`, `Select-OtpCode`, aliases (`otp`, `totp`, `otpc`), and argument completion.
 - NuShell module in `shell/otp-local.nu` providing structured pipeline integration, `otp show`, `otp copy`, and `otp record` table records.
 - WSL2 UNIX-to-named-pipe IPC bridge in `src/authy_local/wsl_bridge.py` allowing Linux guest environments to securely query host Windows DPAPI storage.

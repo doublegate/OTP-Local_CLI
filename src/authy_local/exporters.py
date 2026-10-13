@@ -234,7 +234,7 @@ def collect_backend_tokens(
                 except ValueError, AppError:
                     pass
         return tokens
-    if backend in ("yubikey", "tpm2-totp"):
+    if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
         return []
 
     raise AppError(2)

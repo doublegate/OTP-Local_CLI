@@ -15,7 +15,7 @@ Apple Secure Enclave & macOS Keychain backend integration. `otp-local tui` provi
 Textual dashboard supporting six credential backends (1Password, pass-otp/GPG,
 totpm/TPM 2.0, YubiKey OATH, hardware TPM 2.0, and macOS Keychain).
 
-Automated validation uses synthetic data across 755 unit, integration, and E2E
+Automated validation uses synthetic data across 770 unit, integration, and E2E
 regression tests with a 100% pass rate. The operator approved the exact home
 installation and verified live operations. Checkpoint A disposable acceptance
 and Checkpoint B pilot-001 passed on operator attestation.
@@ -30,7 +30,7 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | Host prerequisites | Read-only snapshot verified | docs/2026-10-12-phase-0-readiness.md |
 | Human 1Password readiness | Operator-attested pass | Desktop unlock and scoped CLI approval; Checkpoint A disposable acceptance passed |
 | Account migration | Pilot migrated, operator-attested | pilot-001: total 1, migrated 1, blocked 0, pending 0; full inventory unknown |
-| Automated tests/lint/build | All quality gates pass | 718 tests; 100% pass rate; ruff clean, markdownlint clean |
+| Automated tests/lint/build | All quality gates pass | 770 tests; 100% pass rate; ruff clean, markdownlint clean |
 | Version control | Standalone local main; no remote | Host-level Git verification; no remote push requested |
 
 ## Milestones
@@ -63,7 +63,7 @@ Package version is 1.1.0.
 |---|---|---|
 | Derived specification | Fourteen numbered guides and eight ADRs | docs/00-index.md |
 | Delivery plan | Seven phases; fifteen sprints; 52 completed tasks | to-dos/README.md and sprint files |
-| Software/test/release | v1.1.0 (Phase 7 in-flight) / 755 tests pass / 100% pass rate | tests/ |
+| Software/test/release | v1.1.0 (Phase 8 in-flight) / 770 tests pass / 100% pass rate | tests/ |
 | Coverage | 94% aggregate; validator/1Password adapter 100% | Branch-inclusive coverage report; blocking floors 90% / 100% |
 | Account outcomes | Pilot: 1 migrated / 0 blocked / 0 pending; full inventory unknown | Checkpoint B operator attestation; no private inventory read |
 | Documentation validation | Authored files; links, task IDs and lint pass; reference hash unchanged | docs/00-index.md |
@@ -121,6 +121,8 @@ Audit modals, search filter modifiers (`type:`, `tag:`, `algo:`, `digits:`), and
 completions for fish, bash, and zsh. All 699 automated tests passed with a 100% pass rate.
 
 2026-10-13: completed Sprints 7.1 and 7.2 (Windows DPAPI & Credential Manager backend, PowerShell 7+ module, NuShell module, WSL2 UNIX/named-pipe bridge). All 755 automated tests passed with a 100% pass rate.
+
+2026-10-13: completed Sprint 8.1 (FIDO2 CTAP 2.1 hardware key core, HMAC-secret derivation, AES-256-GCM seed encryption, and synthetic CTAP2 device mock suite). All 770 automated tests passed with a 100% pass rate.
 
 ## Open decisions and limits
 

@@ -100,6 +100,7 @@ def parser() -> Parser:
                 "tpm2-totp",
                 "keychain",
                 "dpapi",
+                "fido2",
             ),
             default="onepassword",
         )
@@ -327,6 +328,28 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                     finally:
                         confirmation = ""
                 dpapi.dpapi_enroll(args.account, secret, env)
+            elif args.backend == "fido2":
+                from .backends import fido2
+
+                if not args.account:
+                    raise AppError(2)
+                if not secret:
+                    import warnings
+                    from getpass import GetPassWarning, getpass
+
+                    confirmation = ""
+                    try:
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("error", GetPassWarning)
+                            secret = getpass("Base32 enrollment secret (hidden): ")
+                            confirmation = getpass("Repeat enrollment value (hidden): ")
+                        if secret != confirmation:
+                            raise AppError(2)
+                    except GetPassWarning:
+                        raise AppError(3) from None
+                    finally:
+                        confirmation = ""
+                fido2.fido2_enroll(args.account, secret, env)
             else:
                 from .backends import local
 
@@ -388,8 +411,14 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 selected_id = launch_picker(rows, env, launcher=args.launcher)
                 scope = Scope(selected_id, account, vault)
                 code = retrieve(scope, env)
-            elif args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
-                if args.backend == "dpapi":
+            elif args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
+                if args.backend == "fido2":
+                    from .backends import fido2
+
+                    rows = fido2.fido2_records(env)
+                    selected_id = launch_picker(rows, env, launcher=args.launcher)
+                    code = fido2.fido2_code(selected_id, env)
+                elif args.backend == "dpapi":
                     from .backends import dpapi
 
                     rows = dpapi.dpapi_records(env)
@@ -797,10 +826,20 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
         env = dict(os.environ)
         if copying:
             clipboard_capability(env)
-        if args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi"):
+        if args.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
             from .interaction import choose_records
 
-            if args.backend == "dpapi":
+            if args.backend == "fido2":
+                from .backends import fido2
+
+                if args.command == "select":
+                    selected = choose_records(fido2.fido2_records(env), env)
+                    code = fido2.fido2_code(selected, env)
+                else:
+                    if not args.account:
+                        raise AppError(2)
+                    code = fido2.fido2_code(args.account, env)
+            elif args.backend == "dpapi":
                 from .backends import dpapi
 
                 if args.command == "select":
