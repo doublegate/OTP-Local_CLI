@@ -4,6 +4,9 @@
 
 ### Added
 
+- Resident background authentication daemon (`otp-local daemon`) in `src/authy_local/daemon.py` with standard lifecycle controls (`start`, `stop`, `status`, `reload`), systemd user service generator, automatic cache timeouts, and memory page-locking (`mlockall`).
+- High-speed binary CBOR IPC protocol over UNIX domain socket (`/run/user/$UID/otp-local.sock`) in `src/authy_local/ipc.py` with strict Linux `SO_PEERCRED` caller UID verification preventing local privilege escalation.
+- Zero-copy POSIX shared-memory circular ring buffer (`/dev/shm/otp-local-$UID`, 64 KiB) in `src/authy_local/shm.py` with cache-line-aligned slots and atomic spinlocks achieving sub-0.01ms lookup latency.
 - FIDO2 CTAP 2.1 hardware security key backend in `src/authy_local/backends/fido2.py` utilizing CTAP2 `hmac-secret` / WebAuthn PRF extensions and AES-256-GCM seed encryption.
 - Multi-token enrollment architecture supporting primary and secondary backup hardware security keys with synchronized salt configurations (`fido2_add_backup_token`, candidate fallback loop in `fido2_code`).
 - Textual TUI `Fido2TouchModal` featuring an interactive pulsing visual touch indicator and timeout countdown timer in `src/authy_local/tui.py`.

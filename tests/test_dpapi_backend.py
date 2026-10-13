@@ -123,9 +123,7 @@ class SyntheticWin32Mock:
             self._keepalive.append(c)
             cred_ptrs[idx] = ctypes.pointer(c)
         self._keepalive.append(cred_ptrs)
-        p_p_creds.contents = ctypes.cast(
-            cred_ptrs, ctypes.POINTER(dpapi.PCREDENTIALW)
-        )
+        p_p_creds.contents = ctypes.cast(cred_ptrs, ctypes.POINTER(dpapi.PCREDENTIALW))
         return 1
 
     def _cred_free(self, pBuffer):

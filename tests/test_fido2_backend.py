@@ -54,9 +54,7 @@ class MockCtapHidDevice:
         aaguid = "000102030405060708090a0b0c0d0e0f"
         return cred_id, hmac_output, aaguid
 
-    def mock_assertion(
-        self, cred_id: bytes, salt: bytes, pin: str | None = None
-    ) -> bytes:
+    def mock_assertion(self, cred_id: bytes, salt: bytes, pin: str | None = None) -> bytes:
         if self.simulate_timeout:
             raise TimeoutError("Touch timeout")
         if self.required_pin and pin != self.required_pin:

@@ -233,9 +233,7 @@ def dpapi_encrypt(
     p_entropy = None
     if entropy:
         ent_buf = ctypes.create_string_buffer(entropy)
-        entropy_blob = DATA_BLOB(
-            len(entropy), ctypes.cast(ent_buf, ctypes.POINTER(ctypes.c_char))
-        )
+        entropy_blob = DATA_BLOB(len(entropy), ctypes.cast(ent_buf, ctypes.POINTER(ctypes.c_char)))
         p_entropy = ctypes.pointer(entropy_blob)
 
     success = crypt32.CryptProtectData(
@@ -272,9 +270,7 @@ def dpapi_decrypt(ciphertext: bytes, entropy: bytes | None = None) -> bytes:
     p_entropy = None
     if entropy:
         ent_buf = ctypes.create_string_buffer(entropy)
-        entropy_blob = DATA_BLOB(
-            len(entropy), ctypes.cast(ent_buf, ctypes.POINTER(ctypes.c_char))
-        )
+        entropy_blob = DATA_BLOB(len(entropy), ctypes.cast(ent_buf, ctypes.POINTER(ctypes.c_char)))
         p_entropy = ctypes.pointer(entropy_blob)
 
     success = crypt32.CryptUnprotectData(
@@ -356,9 +352,7 @@ def credman_list(prefix: str = CREDENTIAL_TARGET_PREFIX) -> list[str]:
     p_p_creds = ctypes.POINTER(PCREDENTIALW)()
     p_creds_out = ctypes.pointer(p_p_creds)
     filter_str = f"{prefix}*"
-    success = advapi32.CredEnumerateW(
-        filter_str, 0, p_count, p_creds_out
-    )
+    success = advapi32.CredEnumerateW(filter_str, 0, p_count, p_creds_out)
     result_creds = p_creds_out.contents
     if not success or not result_creds:
         return []

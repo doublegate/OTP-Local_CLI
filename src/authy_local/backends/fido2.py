@@ -196,9 +196,7 @@ def fido2_enroll(
     try:
         if hasattr(dev, "mock_enroll"):
             # Synthetic mock path
-            cred_id, hmac_output, aaguid = dev.mock_enroll(
-                account=account, salt=salt, pin=pin
-            )
+            cred_id, hmac_output, aaguid = dev.mock_enroll(account=account, salt=salt, pin=pin)
         else:
             # Native fido2 CTAP2 path
             pin_auth = None
@@ -286,9 +284,7 @@ def fido2_add_backup_token(
 
     try:
         if hasattr(dev, "mock_enroll"):
-            cred_id, hmac_output, aaguid = dev.mock_enroll(
-                account=account, salt=salt, pin=pin
-            )
+            cred_id, hmac_output, aaguid = dev.mock_enroll(account=account, salt=salt, pin=pin)
         else:
             pin_auth = None
             if pin and hasattr(ctap, "info") and ctap.info.options.get("clientPin"):

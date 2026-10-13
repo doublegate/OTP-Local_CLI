@@ -119,6 +119,13 @@ def parser() -> Parser:
     agent_cmd = commands.add_parser("agent", allow_abbrev=False)
     agent_cmd.add_argument("action", choices=("status", "start", "stop", "lock"))
     agent_cmd.add_argument("--timeout", type=float, default=900.0)
+    daemon_cmd = commands.add_parser("daemon", allow_abbrev=False)
+    daemon_cmd.add_argument(
+        "action",
+        choices=("start", "stop", "status", "reload", "systemd-install", "systemd-unit"),
+    )
+    daemon_cmd.add_argument("--foreground", action="store_true")
+    daemon_cmd.add_argument("--timeout", type=float, default=900.0)
     unlock_cmd = commands.add_parser("unlock", allow_abbrev=False)
     unlock_cmd.add_argument("--account")
     return root
@@ -823,6 +830,32 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             interactive_unlock(dict(os.environ), account=args.account)
             notice(stderr, "Session unlocked.")
             return 0
+        if args.command == "daemon":
+            if sys.platform not in ("linux", "darwin", "win32") or sys.version_info[:2] != (3, 14):
+                raise AppError(3)
+            from .daemon import (
+                daemon_reload,
+                daemon_start,
+                daemon_status,
+                daemon_stop,
+                daemon_systemd_install,
+                generate_systemd_unit,
+            )
+
+            env = dict(os.environ)
+            if args.action == "start":
+                return daemon_start(foreground=getattr(args, "foreground", False), env=env)
+            elif args.action == "stop":
+                return daemon_stop(env=env)
+            elif args.action == "status":
+                return daemon_status(env=env)
+            elif args.action == "reload":
+                return daemon_reload(env=env)
+            elif args.action == "systemd-install":
+                return daemon_systemd_install(env=env)
+            elif args.action == "systemd-unit":
+                stdout.write(generate_systemd_unit())
+                return 0
         scope = None
 
         if args.backend == "onepassword":

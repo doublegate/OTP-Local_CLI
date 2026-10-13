@@ -150,7 +150,7 @@ class WslBridgeServer:
             return False
         try:
             client, _ = self._server_sock.accept()
-        except (TimeoutError, socket.timeout, OSError):
+        except TimeoutError, socket.timeout, OSError:
             return False
 
         try:
@@ -228,7 +228,9 @@ class WslBridgeClient:
         """Retrieve list of enrolled accounts from host Windows DPAPI."""
         resp = self._send_request({"action": "records"})
         records = resp.get("records", [])
-        return [(str(r[0]), str(r[1])) for r in records if isinstance(r, (list, tuple)) and len(r) >= 2]
+        return [
+            (str(r[0]), str(r[1])) for r in records if isinstance(r, (list, tuple)) and len(r) >= 2
+        ]
 
     def get_code(self, account: str, timestamp: float | None = None) -> str:
         """Request evaluation of TOTP code for account from host Windows DPAPI."""

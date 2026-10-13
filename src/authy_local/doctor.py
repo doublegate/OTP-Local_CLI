@@ -111,9 +111,7 @@ def report(env: dict[str, str]) -> dict:
     elif sys.platform == "win32":
         result["dpapi"] = dpapi.probe(env)
         result["credman"] = dpapi.probe_credman(env)
-        result["windows-hello"] = {
-            "state": "available" if dpapi.has_windows_hello() else "missing"
-        }
+        result["windows-hello"] = {"state": "available" if dpapi.has_windows_hello() else "missing"}
         result["keychain"] = {"state": "not-applicable"}
         result["secure-enclave"] = {"state": "not-applicable"}
         result["totpm"] = {"state": "not-applicable"}
