@@ -1,0 +1,9 @@
+{
+  "config": {
+    "MD013": false,
+    "MD033": false,
+    "MD060": false
+  },
+  "globs": ["README.md", "PROJECT-STATUS.md", "ROADMAP.md", "CHANGELOG.md", "docs/**/*.md", "to-dos/**/*.md"],
+  "ignores": ["ref-docs/**", "AGENTS.md", "CLAUDE.md", "GEMINI.md"]
+}

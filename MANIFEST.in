@@ -1,0 +1,2 @@
+include tests/fixtures/*.bash
+include tests/fixtures/pass-otp-LICENSE

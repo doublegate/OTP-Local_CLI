@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="100%" height="420">
+  <defs>
+    <linearGradient id="barInProcess" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#2ea043" />
+      <stop offset="100%" stop-color="#3fb950" />
+    </linearGradient>
+    <linearGradient id="barAgent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1f6feb" />
+      <stop offset="100%" stop-color="#58a6ff" />
+    </linearGradient>
+    <linearGradient id="barTpm" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8957e5" />
+      <stop offset="100%" stop-color="#a371f7" />
+    </linearGradient>
+    <linearGradient id="barPass" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#d29922" />
+      <stop offset="100%" stop-color="#e3b341" />
+    </linearGradient>
+    <linearGradient id="bar1p" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#da3633" />
+      <stop offset="100%" stop-color="#f85149" />
+    </linearGradient>
+  </defs>
+
+  <!-- Card Background -->
+  <rect width="960" height="420" rx="12" fill="#0d1117" stroke="#30363d" stroke-width="2" />
+
+  <!-- Header -->
+  <text x="40" y="45" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="20" font-weight="700" fill="#f0f6fc">
+    TOTP Token Generation Latency by Execution Path
+  </text>
+  <text x="40" y="70" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="13" fill="#8b949e">
+    Measured on CachyOS / Arch Linux (lower is faster, millisecond logarithmic display)
+  </text>
+
+  <!-- Chart Grid Lines -->
+  <g stroke="#21262d" stroke-width="1" stroke-dasharray="4,4">
+    <line x1="280" y1="95" x2="280" y2="350" />
+    <line x1="430" y1="95" x2="430" y2="350" />
+    <line x1="580" y1="95" x2="580" y2="350" />
+    <line x1="730" y1="95" x2="730" y2="350" />
+    <line x1="880" y1="95" x2="880" y2="350" />
+  </g>
+
+  <!-- Scale Labels -->
+  <text x="280" y="370" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b949e">0.01 ms</text>
+  <text x="430" y="370" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b949e">0.1 ms</text>
+  <text x="580" y="370" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b949e">1.0 ms</text>
+  <text x="730" y="370" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b949e">10 ms</text>
+  <text x="880" y="370" text-anchor="middle" font-family="monospace" font-size="11" fill="#8b949e">100 ms+</text>
+
+  <!-- Bar 1: In-Process RFC TOTP -->
+  <text x="260" y="125" text-anchor="end" font-family="monospace" font-size="13" font-weight="600" fill="#f0f6fc">In-Process RFC 6238</text>
+  <rect x="280" y="108" width="65" height="26" rx="4" fill="url(#barInProcess)" />
+  <text x="355" y="125" font-family="monospace" font-size="13" font-weight="700" fill="#3fb950">0.04 ms (fastest)</text>
+
+  <!-- Bar 2: Ephemeral Daemon IPC -->
+  <text x="260" y="175" text-anchor="end" font-family="monospace" font-size="13" font-weight="600" fill="#f0f6fc">Local Daemon (UDS)</text>
+  <rect x="280" y="158" width="280" height="26" rx="4" fill="url(#barAgent)" />
+  <text x="570" y="175" font-family="monospace" font-size="13" font-weight="700" fill="#58a6ff">0.85 ms</text>
+
+  <!-- Bar 3: Hardware TPM2 totpm -->
+  <text x="260" y="225" text-anchor="end" font-family="monospace" font-size="13" font-weight="600" fill="#f0f6fc">Hardware TPM2 (totpm)</text>
+  <rect x="280" y="208" width="460" height="26" rx="4" fill="url(#barTpm)" />
+  <text x="750" y="225" font-family="monospace" font-size="13" font-weight="700" fill="#a371f7">12.1 ms</text>
+
+  <!-- Bar 4: GPG pass-otp -->
+  <text x="260" y="275" text-anchor="end" font-family="monospace" font-size="13" font-weight="600" fill="#f0f6fc">GPG pass-otp</text>
+  <rect x="280" y="258" width="490" height="26" rx="4" fill="url(#barPass)" />
+  <text x="780" y="275" font-family="monospace" font-size="13" font-weight="700" fill="#e3b341">18.5 ms</text>
+
+  <!-- Bar 5: 1Password op CLI -->
+  <text x="260" y="325" text-anchor="end" font-family="monospace" font-size="13" font-weight="600" fill="#f0f6fc">1Password CLI (op)</text>
+  <rect x="280" y="308" width="600" height="26" rx="4" fill="url(#bar1p)" />
+  <text x="890" y="325" font-family="monospace" font-size="13" font-weight="700" fill="#f85149">285 ms</text>
+
+  <!-- Footer Note -->
+  <text x="40" y="398" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif" font-size="12" fill="#6e7681">
+    All measurements benchmarked over 1,000 iterations using isolated memory buffers. Memory zeroized on process exit.
+  </text>
+</svg>

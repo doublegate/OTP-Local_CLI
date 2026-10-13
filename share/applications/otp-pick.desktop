@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Quick OTP Picker
+Comment=Desktop Fast OTP Launcher and Clipboard Copy
+Exec=otp-local pick
+Icon=security-high
+Terminal=false
+Type=Application
+Categories=Utility;Security;
+Keywords=otp;2fa;totp;pick;copy;rofi;wofi;
+StartupNotify=false

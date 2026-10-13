@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 580" width="100%" height="580">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+  </defs>
+
+  <!-- Terminal Window Chrome -->
+  <rect x="10" y="10" width="940" height="560" rx="12" fill="#0d1117" stroke="#30363d" stroke-width="2" filter="url(#shadow)" />
+
+  <!-- Window Titlebar -->
+  <path d="M 10 22 C 10 15.37 15.37 10 22 10 L 938 10 C 944.63 10 950 15.37 950 22 L 950 48 L 10 48 Z" fill="#161b22" />
+  <circle cx="34" cy="29" r="6" fill="#ff5f56" />
+  <circle cx="54" cy="29" r="6" fill="#ffbd2e" />
+  <circle cx="74" cy="29" r="6" fill="#27c93f" />
+
+  <!-- Title Text -->
+  <text x="480" y="34" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, monospace" font-size="13" font-weight="600" fill="#8b949e">
+    otp-local tui — Terminal Companion [1Password / pass-otp / TPM2]
+  </text>
+
+  <!-- App Header / Stats Bar -->
+  <rect x="26" y="60" width="908" height="52" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1" />
+  <text x="44" y="91" font-family="monospace" font-size="15" font-weight="700" fill="#58a6ff">● ACTIVE BACKEND: 1Password</text>
+  <text x="320" y="91" font-family="monospace" font-size="13" fill="#8b949e">Session: <tspan fill="#3fb950">Running (PID 1414530)</tspan></text>
+  <text x="600" y="91" font-family="monospace" font-size="13" fill="#8b949e">Lock: <tspan fill="#d29922">900s Idle Timeout</tspan></text>
+  <rect x="810" y="74" width="108" height="24" rx="6" fill="#1f6feb" />
+  <text x="864" y="90" text-anchor="middle" font-family="monospace" font-size="11" font-weight="700" fill="#ffffff">DOCTOR OK</text>
+
+  <!-- Search / Filter Input Bar -->
+  <rect x="26" y="122" width="908" height="38" rx="6" fill="#090d13" stroke="#388bfd" stroke-width="1.5" />
+  <text x="44" y="146" font-family="monospace" font-size="14" fill="#8b949e">Filter accounts: <tspan fill="#f0f6fc">aws-production</tspan><tspan fill="#58a6ff">█</tspan></text>
+
+  <!-- Table Header -->
+  <rect x="26" y="172" width="908" height="34" fill="#21262d" />
+  <text x="44" y="194" font-family="monospace" font-size="12" font-weight="700" fill="#8b949e">ISSUER / SERVICE</text>
+  <text x="250" y="194" font-family="monospace" font-size="12" font-weight="700" fill="#8b949e">ACCOUNT IDENTITY</text>
+  <text x="480" y="194" font-family="monospace" font-size="12" font-weight="700" fill="#8b949e">CURRENT TOTP</text>
+  <text x="650" y="194" font-family="monospace" font-size="12" font-weight="700" fill="#8b949e">TTL REMAINING</text>
+  <text x="810" y="194" font-family="monospace" font-size="12" font-weight="700" fill="#8b949e">BACKEND</text>
+
+  <!-- Row 1: Selected (Highlight) -->
+  <rect x="26" y="208" width="908" height="52" fill="#1f2937" stroke="#388bfd" stroke-width="1.2" />
+  <text x="44" y="239" font-family="monospace" font-size="14" font-weight="700" fill="#ffffff">Amazon Web Services</text>
+  <text x="250" y="239" font-family="monospace" font-size="13" fill="#c9d1d9">admin@infra-prod</text>
+  <!-- OTP Code Display -->
+  <rect x="475" y="218" width="130" height="32" rx="4" fill="#0d1117" stroke="#30363d" stroke-width="1" />
+  <text x="540" y="240" text-anchor="middle" font-family="monospace" font-size="18" font-weight="800" fill="#58a6ff" letter-spacing="3">849 201</text>
+  <!-- Countdown Progress Bar -->
+  <rect x="650" y="228" width="100" height="12" rx="6" fill="#30363d" />
+  <rect x="650" y="228" width="80" height="12" rx="6" fill="#3fb950" />
+  <text x="760" y="239" font-family="monospace" font-size="12" font-weight="700" fill="#3fb950">24s</text>
+  <text x="810" y="239" font-family="monospace" font-size="12" fill="#8b949e">1Password</text>
+
+  <!-- Row 2 -->
+  <rect x="26" y="262" width="908" height="50" fill="#0d1117" />
+  <text x="44" y="293" font-family="monospace" font-size="14" font-weight="600" fill="#e6edf3">GitHub Security</text>
+  <text x="250" y="293" font-family="monospace" font-size="13" fill="#8b949e">octocat@github.com</text>
+  <rect x="475" y="271" width="130" height="32" rx="4" fill="#161b22" stroke="#30363d" stroke-width="1" />
+  <text x="540" y="293" text-anchor="middle" font-family="monospace" font-size="18" font-weight="800" fill="#3fb950" letter-spacing="3">491 832</text>
+  <rect x="650" y="281" width="100" height="12" rx="6" fill="#30363d" />
+  <rect x="650" y="281" width="60" height="12" rx="6" fill="#e3b341" />
+  <text x="760" y="292" font-family="monospace" font-size="12" font-weight="700" fill="#e3b341">18s</text>
+  <text x="810" y="293" font-family="monospace" font-size="12" fill="#8b949e">pass-otp</text>
+
+  <!-- Row 3 -->
+  <rect x="26" y="314" width="908" height="50" fill="#161b22" />
+  <text x="44" y="345" font-family="monospace" font-size="14" font-weight="600" fill="#e6edf3">Google Cloud Platform</text>
+  <text x="250" y="345" font-family="monospace" font-size="13" fill="#8b949e">deploy@corp.net</text>
+  <rect x="475" y="323" width="130" height="32" rx="4" fill="#0d1117" stroke="#30363d" stroke-width="1" />
+  <text x="540" y="345" text-anchor="middle" font-family="monospace" font-size="18" font-weight="800" fill="#79c0ff" letter-spacing="3">109 455</text>
+  <rect x="650" y="333" width="100" height="12" rx="6" fill="#30363d" />
+  <rect x="650" y="333" width="25" height="12" rx="6" fill="#f85149" />
+  <text x="760" y="344" font-family="monospace" font-size="12" font-weight="700" fill="#f85149">07s</text>
+  <text x="810" y="345" font-family="monospace" font-size="12" fill="#8b949e">totpm (TPM2)</text>
+
+  <!-- Row 4 -->
+  <rect x="26" y="366" width="908" height="50" fill="#0d1117" />
+  <text x="44" y="397" font-family="monospace" font-size="14" font-weight="600" fill="#e6edf3">Cloudflare Enterprise</text>
+  <text x="250" y="397" font-family="monospace" font-size="13" fill="#8b949e">ops@edge-network.com</text>
+  <rect x="475" y="375" width="130" height="32" rx="4" fill="#161b22" stroke="#30363d" stroke-width="1" />
+  <text x="540" y="397" text-anchor="middle" font-family="monospace" font-size="18" font-weight="800" fill="#58a6ff" letter-spacing="3">620 184</text>
+  <rect x="650" y="385" width="100" height="12" rx="6" fill="#30363d" />
+  <rect x="650" y="385" width="95" height="12" rx="6" fill="#3fb950" />
+  <text x="760" y="396" font-family="monospace" font-size="12" font-weight="700" fill="#3fb950">29s</text>
+  <text x="810" y="397" font-family="monospace" font-size="12" fill="#8b949e">1Password</text>
+
+  <!-- Row 5 -->
+  <rect x="26" y="418" width="908" height="50" fill="#161b22" />
+  <text x="44" y="449" font-family="monospace" font-size="14" font-weight="600" fill="#e6edf3">Bitwarden / Vault</text>
+  <text x="250" y="449" font-family="monospace" font-size="13" fill="#8b949e">backup-user</text>
+  <rect x="475" y="427" width="130" height="32" rx="4" fill="#0d1117" stroke="#30363d" stroke-width="1" />
+  <text x="540" y="449" text-anchor="middle" font-family="monospace" font-size="18" font-weight="800" fill="#58a6ff" letter-spacing="3">734 502</text>
+  <rect x="650" y="437" width="100" height="12" rx="6" fill="#30363d" />
+  <rect x="650" y="437" width="70" height="12" rx="6" fill="#3fb950" />
+  <text x="760" y="448" font-family="monospace" font-size="12" font-weight="700" fill="#3fb950">21s</text>
+  <text x="810" y="449" font-family="monospace" font-size="12" fill="#8b949e">pass-otp</text>
+
+  <!-- Bottom Command Bar / Hotkeys -->
+  <rect x="26" y="482" width="908" height="66" rx="8" fill="#161b22" stroke="#30363d" stroke-width="1" />
+  <g transform="translate(44, 508)">
+    <text font-family="monospace" font-size="13" fill="#8b949e">
+      <tspan fill="#58a6ff" font-weight="700">[Enter]</tspan> Copy Code   
+      <tspan fill="#58a6ff" font-weight="700">[v]</tspan> View Detail   
+      <tspan fill="#58a6ff" font-weight="700">[q]</tspan> Show QR   
+      <tspan fill="#58a6ff" font-weight="700">[b]</tspan> Switch Backend   
+      <tspan fill="#58a6ff" font-weight="700">[d]</tspan> Run Doctor   
+      <tspan fill="#58a6ff" font-weight="700">[Esc]</tspan> Exit
+    </text>
+    <text y="22" font-family="monospace" font-size="11" fill="#7ee787">
+      Clipboard auto-wipe timer: 30 seconds active | Memory zeroization on exit
+    </text>
+  </g>
+</svg>

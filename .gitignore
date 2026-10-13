@@ -1,0 +1,30 @@
+# Local environments and generated artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.coverage*
+htmlcov/
+.ruff_cache/
+.pytest_cache/
+node_modules/
+.agents/
+*.log
+
+# OS and editor files
+.DS_Store
+*.swp
+*~
+
+# Operator data never belongs in this repository
+.env
+.env.*
+private/
+exports/
+*.1pux
+*.1pif
+*.har
+*.key
+*.pem

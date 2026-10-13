@@ -1,0 +1,127 @@
+# Changelog
+
+## [Unreleased]
+
+## [1.0.0] - 2026-10-13
+
+### Added
+
+- Interactive 1Password CLI session unlock subcommand (`otp-local unlock [--account]`).
+- Hardware credential backends: YubiKey OATH (`yubikey`) and TPM 2.0 (`tpm2-totp`) across CLI, TUI, and shell completions.
+- Plaintext URI list bulk importer (`otp-local import SOURCE --format uri-list`) with comment stripping and account deduplication.
+- Systemd socket-activated user daemon unit (`authy-local-agent.socket`) for on-demand zero-overhead activation.
+- In-TUI interactive terminal QR code modal (`InteractiveQrModal`, shortcut `v`) and Credential Security Audit modal (`AuditReportModal`, shortcut `u`).
+- Structured query modifiers in TUI search filter: `type:`, `tag:`, `algo:`, and `digits:`.
+- Native shell completions for `fish`, `bash`, and `zsh` fully supporting all 14 subcommands, options, and hardware backends.
+- Ephemeral session agent daemon (`otp-local agent`) over private Unix domain socket with auto-lock and cryptographic memory zeroing.
+- Desktop quick-picker (`otp-local pick`) supporting `wofi`, `rofi`, and `fzf` with Wayland detection and notifications.
+- Credential Security and Hygiene Auditor (`otp-local audit`) with duplicate seed, weak key, and algorithm checking.
+- Terminal QR Code visualizer (`otp-local qr`) rendering compact UTF-8 Unicode half-block QR codes.
+- In-process RFC 6238 TOTP and RFC 4226 HOTP calculation engines with Appendix D golden vector verification.
+- Steam Guard 5-character alphanumeric token algorithm (`23456789BCDFGHJKMNPQRTVWXY`).
+- Offline backup exporter (`otp-local export`) supporting Aegis JSON, line-delimited URIs, CSV, and optional GPG encryption.
+- Background clipboard scrubber daemon clearing sensitive OTP codes after a configurable delay with overwrite detection.
+- Bulk migration importer (`otp-local import`) supporting Google Authenticator migration payloads, Aegis JSON, and Bitwarden JSON vaults.
+- Interactive OTP enrollment in Textual TUI (`AddOtpModal`) and CLI (`otp-local enroll`).
+- High-performance Textual TUI migration with responsive bordered layout, action hierarchy, and live countdown timer.
+
+### Fixed
+
+- Prevent terminal locks and freezes on application quit ('q', 'Esc', 'Ctrl+C') by
+  introducing global child process tracking, bounded 15-second subprocess execution,
+  and instant child process termination on Textual app shutdown.
+- Eliminate search latency bottlenecks in TUI token browser by caching search index
+  and reusing pre-indexed entries across keystrokes.
+- Retain the latest Doctor capability summary in TUI Session Status until the
+  next explicit check, without treating it as authentication readiness.
+- Preserve terminal session identity for 1Password calls so normal desktop CLI
+  authorization can be reused; retain separate process groups for bounded cleanup.
+- Remove the unsupported explicit UTF-8 encoding option from OTP retrieval and
+  selection. Both use the CLI's UTF-8 default with inherited `OP_*` options removed.
+
+### Changed
+
+- Promoted package version from candidate to final v1.0.0 release.
+- Reorder and sort TUI main menu items by operational use-case hierarchy:
+  Token Retrieval (Browse and show [1], Browse and copy [2], Show code [3], Copy code [4]),
+  Credential Onboarding (Add OTP entry [5]), Configuration & Scopes (Saved scope [6]),
+  Diagnostics & System Health (Doctor [7]), and Setup, Maintenance & Guidance
+  (Installation preview [8], Private migration guide [9]).
+- Display current action category in the TUI detail workspace pane while preserving
+  OptionList index navigation invariants.
+
+- Credential Security and Hygiene Auditor (`otp-local audit`) inspecting vaults for
+  duplicate seed re-use, weak keys (<80 bits or test vectors), non-standard digest algorithms,
+  and metadata hygiene, with terminal reports and machine-readable `--json` output.
+- Terminal QR Code visualizer (`otp-local qr`) rendering compact UTF-8 Unicode half-block QR
+  codes directly to terminal standard output for rapid mobile scanner re-enrollment.
+- RFC 4226 HOTP counter-based OTP algorithm engine with Appendix D golden vector verification,
+  `hotp://` URI parsing/serialization, and Aegis JSON counter preservation.
+- Enhanced system diagnostics in `otp-local doctor` with non-authenticating capability probes
+  for `qrencode`, `pinentry`, and `gpg-agent` daemon socket reachability.
+- Native in-process RFC 6238 TOTP computation engine supporting SHA-1, SHA-256,
+  and SHA-512 algorithms with golden vector verification and sub-millisecond evaluation.
+- Steam Guard 5-character alphanumeric token algorithm (`23456789BCDFGHJKMNPQRTVWXY`),
+  `steam://` URI ingestion, and custom 5-digit / variable-period support.
+- Offline backup exporter (`otp-local export`) supporting line-delimited RFC 6238 URIs,
+  standard Aegis JSON, and CSV vaults, with enforced 0600 file modes and optional GPG encryption.
+- Sub-second NTP clock drift measurement in `otp-local doctor` extracting exact millisecond
+  offset from `timedatectl timesync-status`.
+- Desktop integration assets: Freedesktop `.desktop` application entries (`authy-local.desktop`,
+  `otp-pick.desktop`), systemd user service unit (`authy-local-agent.service`), and native
+  shell completions for `fish`, `bash`, and `zsh`.
+- Comprehensive Desktop and System Integration Guide in `docs/13-desktop-integration.md`.
+- Ephemeral session agent daemon (`otp-local agent`) over private Unix domain socket
+  with strict 0o700/0o600 file permissions, idle auto-lock, and cryptographic memory clearing.
+- Native desktop quick-launcher (`otp-local pick`) supporting `wofi`, `rofi`, and `fzf`
+  with automatic GUI display detection, desktop notifications, and `--stdout` pipeline support.
+- Multi-term tokenized and subsequence fuzzy search ranking with ReDoS immunity and
+  sub-millisecond evaluation across 5,000 items.
+- Hierarchical folder and namespace navigation (`f` key) in TUI token browser with
+  per-folder item counts and interactive selection modal.
+- Automated background clipboard scrubber daemon clearing sensitive OTP codes after
+  a configurable delay (default 45 seconds) with overwrite detection.
+- Bulk migration importer (`otp-local import`) supporting Google Authenticator migration
+  payloads (pure-Python protobuf varint decoder), Aegis JSON, and Bitwarden JSON vaults
+  with preview `--dry-run` and verified `--apply` modes.
+- Hardware key and TPM 2.0 support probing connected YubiKey OATH credentials (`ykman`)
+  and `tpm2-totp` hardware devices in system diagnostics (`otp-local doctor`).
+
+- Interactive OTP enrollment in Textual TUI (Action 5: "Add OTP entry", hotkeys `5`, `a`, `e`)
+  supporting raw Base32 secret strings, `otpauth://totp/` URIs, and screen QR code capture.
+- Secure QR code decoding via standard input streaming to `zbarimg` and Wayland native
+  clipboard capture via `wl-paste`, avoiding unencrypted temporary file creation.
+- Live real-time derived TOTP code preview with a dynamic 30-second countdown bar and
+  "Copy Test Code" clipboard action for immediate service challenge verification.
+- Multi-backend persistence targeting 1Password (Login category tagged `"OTP"`), GPG
+  `pass-otp`, and hardware TPM `totpm`, with label sanitization and cryptographic memory zeroing.
+- CLI enrollment extension via `otp-local enroll` supporting `--qr-image`, `--qr-clipboard`,
+  `--title`, and `--tags` for 1Password, pass-otp, and totpm backends.
+- Saved optional 1Password TUI metadata tag filter, defaulting to `OTP` for new
+  and existing scopes; clearing the tag includes all scoped Login metadata.
+
+- Confirmed single-entry deletion in local GPG/TPM TUI browsers, with private
+  coarse intent auditing, cancellation safeguards and refreshed metadata.
+- Resident private TUI backend scope and native searchable item browsing, with
+  selected-item show/copy and explicit metadata refresh; CLI scope stays explicit.
+- Dashboard TUI with bordered panes, backend selection, keyboard navigation,
+  editable multi-field scope forms and scrolling results, inspired by btop/htop.
+- Explicit pass-otp/GPG and totpm local-mode adapters, validated hidden CLI
+  enrollment, bounded metadata selection and shared clipboard handling.
+- Pinned native-runtime preview/apply with ownership checks; no key creation,
+  TPM provisioning, package installation or account changes during apply.
+- Public operator guides bundled in the wheel through `otp-local guide`.
+- Official 1.0.0 release; final acceptance and migration remain operator gates.
+- Phase 1 Python companion with non-authenticating capability reporting and
+  explicitly scoped, validated OTP display.
+- Bounded subprocess handling, static diagnostics and synthetic regression tests.
+- Pinned developer tools, local validation gates and Phase 0 readiness templates.
+- Scoped ephemeral fzf selection and explicit Wayland clipboard handoff.
+- Fish wrappers and preview-first offline installation with ownership checks,
+  rollback, conservative uninstall and isolated-home tests.
+- Standard-library curses TUI integrating shared commands, installation preview
+  and private migration guidance; dedicated sprint and architecture decision.
+- Private synthetic acceptance, pilot and bounded-batch operator checklists.
+
+Real-home installation and account migration require their operational checkpoints.
+This development version is not a live readiness or migration-completion claim.

@@ -1,0 +1,87 @@
+#compdef otp-local
+
+_otp_local() {
+    local -a commands
+    commands=(
+        'doctor:Inspect system tools and non-authenticating capabilities'
+        'tui:Launch interactive Textual TUI dashboard'
+        'guide:Display bundled operator markdown guides'
+        'show:Output OTP decimal code to terminal'
+        'copy:Copy OTP code to desktop clipboard'
+        'select:Interactively select and retrieve item'
+        'enroll:Enroll new OTP secret or QR code'
+        'pick:Launch desktop quick-picker (wofi/rofi/fzf)'
+        'import:Import OTP credentials from external backups'
+        'export:Export OTP credentials for offline backup or GPG encryption'
+        'audit:Audit stored tokens for duplicate seeds and vulnerabilities'
+        'qr:Display terminal UTF-8 QR code for phone scanning'
+        'agent:Manage background session agent daemon'
+        'unlock:Interactively authenticate or unlock 1Password CLI session'
+    )
+
+    _arguments -C \
+        '1: :->command' \
+        '*:: :->args'
+
+    case $state in
+        command)
+            _describe -t commands 'otp-local commands' commands
+            ;;
+        args)
+            case $words[1] in
+                doctor)
+                    _arguments '--json[Emit machine-readable JSON capability report]'
+                    ;;
+                guide)
+                    _arguments '1:topic:(optional setup acceptance migration recovery tui)'
+                    ;;
+                unlock)
+                    _arguments '--account[1Password account shorthand or ID]:account:'
+                    ;;
+                pick)
+                    _arguments \
+                        '--launcher[Desktop picker binary]:launcher:(auto wofi rofi fzf)' \
+                        '--no-notify[Suppress desktop notification]' \
+                        '--stdout[Output code directly to stdout]' \
+                        '--allow-pipe[Allow pipe output]' \
+                        '--backend[Credential storage backend]:backend:(onepassword pass-otp totpm yubikey tpm2-totp)'
+                    ;;
+                import)
+                    _arguments \
+                        '--format[Import serialization format]:format:(auto aegis bitwarden google-migration uri-list)' \
+                        '--dry-run[Preview tokens without saving]' \
+                        '--apply[Commit imported tokens to backend]' \
+                        '--backend[Credential storage backend]:backend:(onepassword pass-otp totpm yubikey tpm2-totp)' \
+                        '1:source:_files'
+                    ;;
+                export)
+                    _arguments \
+                        '--format[Export serialization format]:format:(uri aegis csv)' \
+                        '--output[Destination file (enforced 0600 mode)]:output file:_files' \
+                        '--encrypt-gpg[Recipient GPG key ID]:key ID:' \
+                        '--stdout[Output export directly to stdout]' \
+                        '--allow-pipe[Allow pipe output]' \
+                        '--backend[Credential storage backend]:backend:(onepassword pass-otp totpm yubikey tpm2-totp)'
+                    ;;
+                audit)
+                    _arguments \
+                        '--json[Emit machine-readable JSON security report]' \
+                        '--backend[Credential storage backend]:backend:(onepassword pass-otp totpm yubikey tpm2-totp)'
+                    ;;
+                qr)
+                    _arguments \
+                        '--allow-pipe[Allow pipe output]' \
+                        '--backend[Credential storage backend]:backend:(onepassword pass-otp totpm yubikey tpm2-totp)' \
+                        '1:item:'
+                    ;;
+                agent)
+                    _arguments \
+                        '--timeout[Idle auto-lock timeout in seconds]:timeout:' \
+                        '1:action:(status start stop lock)'
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_otp_local "$@"

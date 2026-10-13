@@ -1,0 +1,15 @@
+# Auto-detect text files and normalize line endings to LF
+* text=auto eol=lf
+
+# Force specific files to binary
+*.whl binary
+*.png binary
+*.ico binary
+
+# Export ignore for clean release archives
+.github/ export-ignore
+.agents/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+.markdownlint-cli2.jsonc export-ignore
+to-dos/ export-ignore

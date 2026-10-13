@@ -1,0 +1,90 @@
+# Bash completion for otp-local
+
+_otp_local_completions() {
+    local cur prev words cword
+    _init_completion || return
+
+    local commands="doctor tui guide show copy select enroll pick import export audit qr agent unlock"
+
+    if [[ $cword -eq 1 ]]; then
+        COMPREPLY=( $(compgen -W "$commands" -- "$cur") )
+        return 0
+    fi
+
+    local subcmd="${words[1]}"
+    case "$subcmd" in
+        doctor)
+            COMPREPLY=( $(compgen -W "--json" -- "$cur") )
+            ;;
+        guide)
+            COMPREPLY=( $(compgen -W "optional setup acceptance migration recovery tui" -- "$cur") )
+            ;;
+        unlock)
+            COMPREPLY=( $(compgen -W "--account" -- "$cur") )
+            ;;
+        pick)
+            case "$prev" in
+                --launcher)
+                    COMPREPLY=( $(compgen -W "auto wofi rofi fzf" -- "$cur") )
+                    ;;
+                --backend)
+                    COMPREPLY=( $(compgen -W "onepassword pass-otp totpm yubikey tpm2-totp" -- "$cur") )
+                    ;;
+                *)
+                    COMPREPLY=( $(compgen -W "--launcher --no-notify --stdout --allow-pipe --backend --account --vault --store --key-home --entry --config --service" -- "$cur") )
+                    ;;
+            esac
+            ;;
+        import)
+            case "$prev" in
+                --format)
+                    COMPREPLY=( $(compgen -W "auto aegis bitwarden google-migration uri-list" -- "$cur") )
+                    ;;
+                --backend)
+                    COMPREPLY=( $(compgen -W "onepassword pass-otp totpm yubikey tpm2-totp" -- "$cur") )
+                    ;;
+                *)
+                    COMPREPLY=( $(compgen -W "--format --dry-run --apply --backend --account --vault --store --key-home --entry --config --service" -- "$cur") )
+                    ;;
+            esac
+            ;;
+        export)
+            case "$prev" in
+                --format)
+                    COMPREPLY=( $(compgen -W "uri aegis csv" -- "$cur") )
+                    ;;
+                --backend)
+                    COMPREPLY=( $(compgen -W "onepassword pass-otp totpm yubikey tpm2-totp" -- "$cur") )
+                    ;;
+                --output)
+                    _filedir
+                    ;;
+                *)
+                    COMPREPLY=( $(compgen -W "--format --output --encrypt-gpg --stdout --allow-pipe --backend --account --vault --store --key-home --entry --config --service" -- "$cur") )
+                    ;;
+            esac
+            ;;
+        agent)
+            case "$prev" in
+                agent)
+                    COMPREPLY=( $(compgen -W "status start stop lock" -- "$cur") )
+                    ;;
+                *)
+                    COMPREPLY=( $(compgen -W "--timeout" -- "$cur") )
+                    ;;
+            esac
+            ;;
+        show|copy|select|enroll|audit|qr)
+            case "$prev" in
+                --backend)
+                    COMPREPLY=( $(compgen -W "onepassword pass-otp totpm yubikey tpm2-totp" -- "$cur") )
+                    ;;
+                *)
+                    COMPREPLY=( $(compgen -W "--backend --account --vault --store --key-home --entry --config --service" -- "$cur") )
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+complete -F _otp_local_completions otp-local

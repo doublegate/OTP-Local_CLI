@@ -1,0 +1,14 @@
+[Unit]
+Description=Authy Local Ephemeral Session Agent
+Documentation=https://github.com/doublegate/OTP-Local_CLI
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/otp-local agent start --timeout 900
+Restart=on-failure
+RestartSec=3s
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

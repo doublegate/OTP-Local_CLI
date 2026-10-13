@@ -1,0 +1,11 @@
+[Unit]
+Description=Authy Local Ephemeral Session Agent Socket
+Documentation=https://github.com/doublegate/OTP-Local_CLI
+
+[Socket]
+ListenStream=%h/.local/state/authy-local/agent.sock
+SocketMode=0600
+DirectoryMode=0700
+
+[Install]
+WantedBy=sockets.target

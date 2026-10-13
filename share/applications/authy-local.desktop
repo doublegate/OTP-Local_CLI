@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Authy Local
+Comment=Local OTP Companion and Credential Manager
+Exec=otp-local tui
+Icon=security-high
+Terminal=true
+Type=Application
+Categories=Utility;Security;
+Keywords=otp;2fa;totp;authenticator;onepassword;pass;
+StartupNotify=false

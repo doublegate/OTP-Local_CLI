@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 240" width="100%" height="240">
+  <defs>
+    <linearGradient id="bannerBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d1117" />
+      <stop offset="50%" stop-color="#161b22" />
+      <stop offset="100%" stop-color="#0a0d12" />
+    </linearGradient>
+    <linearGradient id="cyanAccent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#58a6ff" />
+      <stop offset="50%" stop-color="#38d39f" />
+      <stop offset="100%" stop-color="#2ea043" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background Card -->
+  <rect width="1000" height="240" rx="16" fill="url(#bannerBg)" stroke="#30363d" stroke-width="2" />
+
+  <!-- Accent Top Border -->
+  <rect x="0" y="0" width="1000" height="4" rx="2" fill="url(#cyanAccent)" />
+
+  <!-- Shield Icon -->
+  <g transform="translate(60, 48)">
+    <circle cx="48" cy="48" r="46" fill="#1f242c" stroke="#388bfd" stroke-width="2.5" />
+    <!-- Lock / Keyhole / Shield Path -->
+    <path d="M 48 20 L 76 32 C 76 60 48 76 48 76 C 48 76 20 60 20 32 Z" fill="none" stroke="#58a6ff" stroke-width="3" stroke-linejoin="round" />
+    <circle cx="48" cy="44" r="6" fill="#38d39f" />
+    <path d="M 48 50 L 48 62" stroke="#38d39f" stroke-width="3" stroke-linecap="round" />
+  </g>
+
+  <!-- Typography -->
+  <text x="180" y="85" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="38" font-weight="800" fill="#f0f6fc" letter-spacing="-0.5">
+    OTP-Local CLI
+  </text>
+  <text x="180" y="122" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif" font-size="17" font-weight="400" fill="#8b949e">
+    Zero-Storage Terminal Companion for 1Password, Hardware TPM2, YubiKey, and Local TOTP
+  </text>
+
+  <!-- Feature Pills -->
+  <g transform="translate(180, 148)">
+    <!-- Pill 1: Zero Disk Storage -->
+    <rect x="0" y="0" width="156" height="28" rx="14" fill="#1b2a3a" stroke="#1f6feb" stroke-width="1.2" />
+    <circle cx="14" cy="14" r="4" fill="#58a6ff" />
+    <text x="26" y="19" font-family="monospace" font-size="12" font-weight="600" fill="#79c0ff">Zero-Disk-Storage</text>
+
+    <!-- Pill 2: Hardware TPM2 -->
+    <rect x="168" y="0" width="140" height="28" rx="14" fill="#142c23" stroke="#238636" stroke-width="1.2" />
+    <circle cx="182" cy="14" r="4" fill="#3fb950" />
+    <text x="194" y="19" font-family="monospace" font-size="12" font-weight="600" fill="#56d364">Hardware-TPM2</text>
+
+    <!-- Pill 3: Textual TUI -->
+    <rect x="320" y="0" width="130" height="28" rx="14" fill="#2d2238" stroke="#8957e5" stroke-width="1.2" />
+    <circle cx="334" cy="14" r="4" fill="#a371f7" />
+    <text x="346" y="19" font-family="monospace" font-size="12" font-weight="600" fill="#d2a8ff">Textual-TUI</text>
+
+    <!-- Pill 4: Sub-Millisecond -->
+    <rect x="462" y="0" width="144" height="28" rx="14" fill="#2c2214" stroke="#d29922" stroke-width="1.2" />
+    <circle cx="476" cy="14" r="4" fill="#e3b341" />
+    <text x="488" y="19" font-family="monospace" font-size="12" font-weight="600" fill="#f2cc60">0.05ms Generation</text>
+
+    <!-- Pill 5: v1.0.0 Final -->
+    <rect x="618" y="0" width="100" height="28" rx="14" fill="#161b22" stroke="#30363d" stroke-width="1.2" />
+    <text x="638" y="19" font-family="monospace" font-size="12" font-weight="700" fill="#f0f6fc">v1.0.0 GA</text>
+  </g>
+</svg>
