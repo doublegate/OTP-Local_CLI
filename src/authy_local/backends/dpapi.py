@@ -161,9 +161,32 @@ def has_windows_hello() -> bool:
     return False
 
 
+def is_wsl_bridge_active(env: dict[str, str] | None = None) -> bool:
+    """Check if running in WSL or if custom bridge socket is configured."""
+    if env is None:
+        env = dict(os.environ)
+    if env.get("OTP_LOCAL_BRIDGE_SERVER") == "1":
+        return False
+    if env.get("OTP_LOCAL_BRIDGE_SOCKET"):
+        return True
+    try:
+        from ..wsl_bridge import is_wsl
+
+        return is_wsl()
+    except ImportError:
+        return False
+
+
 def probe(env: dict[str, str]) -> dict[str, str | bool]:
     """Probe availability of Windows DPAPI."""
     if sys.platform != "win32" and _crypt32_override is None:
+        if is_wsl_bridge_active(env):
+            from ..wsl_bridge import WslBridgeClient
+
+            client = WslBridgeClient(env=env)
+            if client.ping():
+                return {"state": "available", "hello": False}
+            return {"state": "missing", "hello": False}
         return {"state": "not-applicable"}
     try:
         _get_crypt32()
@@ -178,6 +201,13 @@ def probe(env: dict[str, str]) -> dict[str, str | bool]:
 def probe_credman(env: dict[str, str]) -> dict[str, str]:
     """Probe availability of Windows Credential Manager."""
     if sys.platform != "win32" and _advapi32_override is None:
+        if is_wsl_bridge_active(env):
+            from ..wsl_bridge import WslBridgeClient
+
+            client = WslBridgeClient(env=env)
+            if client.ping():
+                return {"state": "available"}
+            return {"state": "missing"}
         return {"state": "not-applicable"}
     try:
         _get_advapi32()
@@ -348,6 +378,13 @@ def credman_list(prefix: str = CREDENTIAL_TARGET_PREFIX) -> list[str]:
 
 def dpapi_records(env: dict[str, str]) -> list[tuple[str, str]]:
     """List enrolled OTP accounts from Windows Credential Manager / index."""
+    if sys.platform != "win32" and _advapi32_override is None:
+        if is_wsl_bridge_active(env):
+            from ..wsl_bridge import WslBridgeClient
+
+            client = WslBridgeClient(env=env)
+            return client.get_records()
+        raise AppError(3)
     accounts = []
     try:
         targets = credman_list(CREDENTIAL_TARGET_PREFIX)
@@ -368,6 +405,13 @@ def dpapi_code(account: str, env: dict[str, str], timestamp: float | None = None
     """Retrieve DPAPI-encrypted secret from Windows Credential Manager, generate TOTP, and zeroize."""
     if not account or not LABEL.fullmatch(account):
         raise AppError(2)
+    if sys.platform != "win32" and _crypt32_override is None:
+        if is_wsl_bridge_active(env):
+            from ..wsl_bridge import WslBridgeClient
+
+            client = WslBridgeClient(env=env)
+            return client.get_code(account, timestamp=timestamp)
+        raise AppError(3)
     target = f"{CREDENTIAL_TARGET_PREFIX}{account}"
     try:
         ciphertext = credman_read(target)
@@ -395,6 +439,14 @@ def dpapi_enroll(account: str, secret: str, env: dict[str, str]) -> None:
         raise AppError(2)
     if not secret:
         raise AppError(2)
+    if sys.platform != "win32" and _crypt32_override is None:
+        if is_wsl_bridge_active(env):
+            from ..wsl_bridge import WslBridgeClient
+
+            client = WslBridgeClient(env=env)
+            client.enroll(account, secret)
+            return
+        raise AppError(3)
     target = f"{CREDENTIAL_TARGET_PREFIX}{account}"
     ciphertext = dpapi_encrypt(
         secret.encode("utf-8"),
@@ -412,6 +464,14 @@ def dpapi_delete(account: str, env: dict[str, str]) -> None:
     """Delete an OTP credential from Windows Credential Manager and index."""
     if not account or not LABEL.fullmatch(account):
         raise AppError(2)
+    if sys.platform != "win32" and _advapi32_override is None:
+        if is_wsl_bridge_active(env):
+            from ..wsl_bridge import WslBridgeClient
+
+            client = WslBridgeClient(env=env)
+            client.delete(account)
+            return
+        raise AppError(3)
     target = f"{CREDENTIAL_TARGET_PREFIX}{account}"
     credman_delete(target)
     accounts = _read_index(env)

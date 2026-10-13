@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Native PowerShell 7+ integration module and completions in `shell/otp-local.ps1` with `Get-OtpCode`, `Copy-OtpCode`, `Select-OtpCode`, aliases (`otp`, `totp`, `otpc`), and argument completion.
+- NuShell module in `shell/otp-local.nu` providing structured pipeline integration, `otp show`, `otp copy`, and `otp record` table records.
+- WSL2 UNIX-to-named-pipe IPC bridge in `src/authy_local/wsl_bridge.py` allowing Linux guest environments to securely query host Windows DPAPI storage.
+- Windows DPAPI and Credential Manager backend (`src/authy_local/backends/dpapi.py`) with memory zeroing (`ctypes.memset`) and user/machine entropy derivation.
+- Windows diagnostic probing and automated package manager remediation (`winget` and `scoop`) in `otp-local doctor`.
+
 ## [1.1.0] - 2026-10-13
 
 ### Added

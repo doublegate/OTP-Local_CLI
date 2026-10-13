@@ -120,9 +120,14 @@ def report(env: dict[str, str]) -> dict:
     else:
         result["keychain"] = {"state": "not-applicable"}
         result["secure-enclave"] = {"state": "not-applicable"}
-        result["dpapi"] = {"state": "not-applicable"}
-        result["credman"] = {"state": "not-applicable"}
-        result["windows-hello"] = {"state": "not-applicable"}
+        if dpapi.is_wsl_bridge_active(env):
+            result["dpapi"] = dpapi.probe(env)
+            result["credman"] = dpapi.probe_credman(env)
+            result["windows-hello"] = {"state": "not-applicable"}
+        else:
+            result["dpapi"] = {"state": "not-applicable"}
+            result["credman"] = {"state": "not-applicable"}
+            result["windows-hello"] = {"state": "not-applicable"}
     clock = shutil.which("timedatectl", path=env.get("PATH", ""))
     if clock:
         try:

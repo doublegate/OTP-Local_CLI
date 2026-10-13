@@ -15,7 +15,7 @@ Apple Secure Enclave & macOS Keychain backend integration. `otp-local tui` provi
 Textual dashboard supporting six credential backends (1Password, pass-otp/GPG,
 totpm/TPM 2.0, YubiKey OATH, hardware TPM 2.0, and macOS Keychain).
 
-Automated validation uses synthetic data across 718 unit, integration, and E2E
+Automated validation uses synthetic data across 755 unit, integration, and E2E
 regression tests with a 100% pass rate. The operator approved the exact home
 installation and verified live operations. Checkpoint A disposable acceptance
 and Checkpoint B pilot-001 passed on operator attestation.
@@ -63,7 +63,7 @@ Package version is 1.1.0.
 |---|---|---|
 | Derived specification | Fourteen numbered guides and eight ADRs | docs/00-index.md |
 | Delivery plan | Seven phases; fifteen sprints; 52 completed tasks | to-dos/README.md and sprint files |
-| Software/test/release | Final release 1.1.0 / 718 tests pass / 100% pass rate | tests/ |
+| Software/test/release | v1.1.0 (Phase 7 in-flight) / 755 tests pass / 100% pass rate | tests/ |
 | Coverage | 94% aggregate; validator/1Password adapter 100% | Branch-inclusive coverage report; blocking floors 90% / 100% |
 | Account outcomes | Pilot: 1 migrated / 0 blocked / 0 pending; full inventory unknown | Checkpoint B operator attestation; no private inventory read |
 | Documentation validation | Authored files; links, task IDs and lint pass; reference hash unchanged | docs/00-index.md |
@@ -119,6 +119,8 @@ interactive 1Password session unlock (`otp-local unlock`), bulk URI list importe
 systemd socket-activation (`authy-local-agent.socket`), in-TUI terminal QR and Security
 Audit modals, search filter modifiers (`type:`, `tag:`, `algo:`, `digits:`), and complete shell
 completions for fish, bash, and zsh. All 699 automated tests passed with a 100% pass rate.
+
+2026-10-13: completed Sprints 7.1 and 7.2 (Windows DPAPI & Credential Manager backend, PowerShell 7+ module, NuShell module, WSL2 UNIX/named-pipe bridge). All 755 automated tests passed with a 100% pass rate.
 
 ## Open decisions and limits
 
