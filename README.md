@@ -1,6 +1,6 @@
 # OTP-Local CLI
 
-[![Release](https://img.shields.io/badge/release-v1.4.0-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v1.4.0)
+[![Release](https://img.shields.io/badge/release-v1.6.0-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v1.6.0)
 [![Python](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](README.md#cross-platform-installation)
@@ -158,10 +158,11 @@ Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all ex
 - **Cross-Platform Shell Modules**: PowerShell 7+ (`shell/otp-local.ps1`), NuShell (`shell/otp-local.nu`), and WSL2 UNIX-to-named-pipe IPC bridge (`src/authy_local/wsl_bridge.py`).
 - **Modern Textual TUI**: Interactive full-screen terminal interface with live visual countdown progress bars, profile switching, item detail inspector, and searchable token tables.
 - **Fail-Closed Security**: File modes enforced at 0600, parent directories at 0700, and zero sensitive state in process memory or error stack traces.
+- **Runtime Memory Forensics Hardening**: Operating system physical RAM page-locking (`mlock` / `munlock`), core dump exclusion (`madvise(MADV_DONTDUMP)`), core dump disablement (`prctl(PR_SET_DUMPABLE, 0)`), RAII `SecureBuffer` allocator, and signal interception zeroizing heap secrets.
+- **Autonomous Security Auditor v2**: Automated Shannon entropy evaluation (`SEC-005`), host clock drift and NTP skew diagnostics (`SEC-006`), process environment and shell history leak scanning (`SEC-007`), and interactive guided secret rotation (`otp-local audit --rotate`).
 - **Clipboard Scrubber**: High-reliability clipboard scrubber supporting Wayland (`wl-copy`), X11 (`xclip`), Windows (`clip`), and macOS (`pbcopy`) with automatic 30-second memory wipes.
 - **Terminal QR Rendering**: Inspect or cross-enroll tokens via high-contrast UTF-8/ANSI terminal QR codes directly inside the CLI or TUI (`otp-local qr <account>`).
-- **Comprehensive Doctor**: Non-authenticating diagnostic tool (`otp-local doctor` and `otp-local doctor --pam`) evaluating platform tools, system clock synchronization, GPG agents, Secure Enclave, macOS Keychain, TPM devices, FIDO2 authenticators, and PAM subsystem health.
-- **Security Auditor**: Detect identical shared secrets, short seed lengths, or unhardened digest parameters (`otp-local audit`).
+- **Comprehensive Doctor**: Non-authenticating diagnostic tool (`otp-local doctor` and `otp-local doctor --pam`) evaluating platform tools, system clock synchronization, GPG agents, Secure Enclave, macOS Keychain, TPM devices, FIDO2 authenticators, memory forensics capabilities, and PAM subsystem health.
 - **Standardized Importers/Exporters**: Import or export tokens to standard formats (Aegis JSON, 2FAS, Bitwarden, Google Authenticator URI) with optional GPG recipient encryption.
 
 ---
@@ -333,6 +334,21 @@ otp-local agent status
 
 # Terminate session daemon and zeroize cache
 otp-local agent stop
+```
+
+### 5. Security Audit and Secret Rotation
+
+Audit stored tokens for entropy, time skew, and environment exposure, with guided rotation advice:
+
+```sh
+# Run security and hygiene audit
+otp-local audit
+
+# Run audit with guided rotation advisor for vulnerable secrets
+otp-local audit --rotate
+
+# Export audit findings and rotation advice as JSON
+otp-local audit --rotate --json
 ```
 
 ---

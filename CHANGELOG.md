@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-13
+
+### Added
+
+- Runtime memory forensics module in `src/authy_local/security.py` providing operating-system-level physical RAM page locking (`mlock` / `munlock`), core dump exclusion (`madvise(MADV_DONTDUMP)`), core dump disablement (`prctl(PR_SET_DUMPABLE, 0)` and `setrlimit(RLIMIT_CORE, 0)`), and deterministic bytearray zeroization (`ctypes.memset`).
+- Page-aligned `SecureBuffer` allocator and RAII context manager guaranteeing physical memory pinning, core dump protection, bounds validation, and immediate zeroization upon exit or destruction.
+- Emergency process signal interception (`SIGINT`, `SIGTERM`, `SIGHUP`) registering global teardown handlers that automatically scrub and zeroize all active allocated buffers before process termination.
+- Autonomous Security Auditor v2 in `src/authy_local/auditor.py` analyzing stored OTP credentials for entropy, hygiene, time drift, and environment exposure.
+- Shannon entropy analysis (`calculate_shannon_entropy`) identifying repetitive patterns or predictable character distributions; flags low-entropy secrets (<2.5 bits/char) with rule `SEC-005`.
+- Host time drift and NTP skew diagnostics (`check_time_drift`) measuring local clock offsets against RFC 6238 timing boundaries; flags offsets >= 1.0s with rule `SEC-006`.
+- Process environment and history leak detector (`scan_environment_leaks`) auditing process environment variables, `/proc/$PID/environ`, command-line arguments (`/proc/$PID/cmdline`), and shell history logs (`.bash_history`, `.zsh_history`, `fish_history`); flags plaintext seeds with rule `SEC-007`.
+- Guided secret rotation assistant (`generate_rotation_advice`) with CLI flag `otp-local audit --rotate` producing fresh 160-bit cryptographically secure Base32 seeds, algorithm upgrade guidance (SHA1 to SHA256), and valid `otpauth://` URIs.
+- Diagnostic probe `memory-security` in `src/authy_local/doctor.py` and `otp-local doctor` reporting operational status of `mlock` page-locking and `madvise_dontdump` core dump exclusion.
+- Comprehensive test suites in `tests/test_memory_security.py` (13 tests) and `tests/test_auditor_v2.py` (15 tests).
+
 ## [1.5.0] - 2026-10-13
 
 ### Added

@@ -1,6 +1,6 @@
 # Phase 11: Autonomous Security Auditor v2 and Memory Forensics Hardening
 
-Status: Planned for release v1.6.0. See [delivery index](README.md) and [ROADMAP.md](../ROADMAP.md).
+Status: Complete; delivered in release v1.6.0. See [delivery index](README.md) and [ROADMAP.md](../ROADMAP.md).
 
 ## Objective
 

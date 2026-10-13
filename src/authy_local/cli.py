@@ -101,6 +101,7 @@ def parser() -> Parser:
     export_cmd.add_argument("--allow-pipe", action="store_true")
     audit_cmd = commands.add_parser("audit", allow_abbrev=False)
     audit_cmd.add_argument("--json", action="store_true")
+    audit_cmd.add_argument("--rotate", action="store_true")
     qr_cmd = commands.add_parser("qr", allow_abbrev=False)
     qr_cmd.add_argument("item", nargs="?")
     qr_cmd.add_argument("--allow-pipe", action="store_true")
@@ -758,7 +759,8 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                     profile[f] = val
 
             tokens = collect_backend_tokens(args.backend, profile, env)
-            report = audit_tokens(tokens, backend=args.backend)
+            rotate = getattr(args, "rotate", False)
+            report = audit_tokens(tokens, backend=args.backend, env=env, rotate=rotate)
             if args.json:
                 stdout.write(json.dumps(report.to_dict(), indent=2) + "\n")
             else:

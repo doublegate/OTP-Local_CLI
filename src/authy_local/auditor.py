@@ -1,9 +1,17 @@
-"""Credential Security and Hygiene Auditor for stored OTP tokens."""
+"""Credential Security, Hygiene, and Entropy Auditor v2 for stored OTP tokens."""
 
+import base64
+import math
+import os
+import re
+import secrets
+import shutil
 from collections import defaultdict
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 from .enrollment import OtpParameters, clean_base32
+from .processes import run
 
 # Known test vectors and sample secrets that should never be used in production
 KNOWN_TEST_SEEDS = {
@@ -24,7 +32,7 @@ class AuditFinding:
     description: str
     recommendation: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
@@ -35,8 +43,9 @@ class AuditReport:
     findings: list[AuditFinding]
     score: int
     grade: str
+    rotations: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "backend": self.backend,
             "total_tokens": self.total_tokens,
@@ -44,6 +53,7 @@ class AuditReport:
             "grade": self.grade,
             "findings_count": len(self.findings),
             "findings": [f.to_dict() for f in self.findings],
+            "rotations": self.rotations,
         }
 
 
@@ -53,8 +63,210 @@ def _token_label(token: OtpParameters) -> str:
     return token.issuer or token.account or "unlabeled_entry"
 
 
-def audit_tokens(tokens: list[OtpParameters], backend: str = "local") -> AuditReport:
-    """Analyze a list of OTP tokens for security vulnerabilities and hygiene issues."""
+def calculate_shannon_entropy(secret: str) -> float:
+    """Calculate Shannon entropy in bits per character for a given string.
+
+    Max theoretical entropy for Base32 (32 symbols) is 5.0 bits/char.
+    """
+    if not secret:
+        return 0.0
+    counts: dict[str, int] = {}
+    for char in secret:
+        counts[char] = counts.get(char, 0) + 1
+    total = len(secret)
+    entropy = 0.0
+    for count in counts.values():
+        p = count / total
+        entropy -= p * math.log2(p)
+    return entropy
+
+
+def check_time_drift(env: dict[str, str]) -> dict[str, Any]:
+    """Inspect local clock drift and NTP synchronization against RFC 6238 timing boundaries."""
+    # Synthetic test hook
+    if "FAKE_TIME_SKEW_SECONDS" in env:
+        try:
+            skew = float(env["FAKE_TIME_SKEW_SECONDS"])
+            return {
+                "synchronized": abs(skew) < 1.0,
+                "offset_seconds": skew,
+                "skew_severity": "CRITICAL"
+                if abs(skew) >= 5.0
+                else ("HIGH" if abs(skew) >= 1.5 else "LOW"),
+            }
+        except ValueError:
+            pass
+
+    clock_bin = shutil.which("timedatectl", path=env.get("PATH", ""))
+    if clock_bin:
+        try:
+            obs = run(
+                [clock_bin, "timesync-status"],
+                env=env,
+                timeout=3,
+                stdout_cap=4096,
+            )
+            if obs.returncode == 0 and obs.stdout:
+                m = re.search(rb"Offset:\s*([+-]?\d+(?:\.\d+)?)\s*(us|ms|s)", obs.stdout)
+                if m:
+                    val = float(m.group(1))
+                    unit = m.group(2).decode("ascii")
+                    if unit == "ms":
+                        val /= 1000.0
+                    elif unit == "us":
+                        val /= 1_000_000.0
+                    return {
+                        "synchronized": abs(val) < 1.0,
+                        "offset_seconds": val,
+                        "skew_severity": "HIGH" if abs(val) >= 2.0 else "LOW",
+                    }
+        except Exception:
+            pass
+
+    return {"synchronized": True, "offset_seconds": 0.0, "skew_severity": "NONE"}
+
+
+def scan_environment_leaks(
+    tokens: list[OtpParameters],
+    env: dict[str, str],
+    pid: int | None = None,
+) -> list[AuditFinding]:
+    """Scan process environment and shell history for accidentally leaked OTP seeds."""
+    leaked_accounts: list[str] = []
+
+    # Map normalized secrets to token labels
+    secret_to_label: dict[str, str] = {}
+    for t in tokens:
+        try:
+            clean = clean_base32(t.secret)
+            if len(clean) >= 16 and clean not in KNOWN_TEST_SEEDS:
+                secret_to_label[clean] = _token_label(t)
+        except Exception:
+            pass
+
+    if not secret_to_label:
+        return []
+
+    # 1. Scan environment variables
+    for k, v in env.items():
+        if k.startswith("FAKE_"):
+            continue
+        for sec, label in secret_to_label.items():
+            if sec in v:
+                leaked_accounts.append(f"{label} (in env var ${k})")
+
+    # 2. Scan process environ and command-line arguments if accessible
+    proc_candidates = []
+    fake_proc = env.get("FAKE_PROC_ENVIRON")
+    if fake_proc:
+        proc_candidates.append(fake_proc)
+    fake_cmdline = env.get("FAKE_PROC_CMDLINE")
+    if fake_cmdline:
+        proc_candidates.append(fake_cmdline)
+
+    curr_pid = pid or os.getpid()
+    for ppath in (f"/proc/{curr_pid}/environ", f"/proc/{curr_pid}/cmdline"):
+        if os.path.isfile(ppath):
+            proc_candidates.append(ppath)
+
+    for proc_path in proc_candidates:
+        try:
+            with open(proc_path, "rb") as f:
+                raw = f.read().replace(b"\x00", b" ").decode("utf-8", errors="replace")
+                for sec, label in secret_to_label.items():
+                    if sec in raw:
+                        desc = f"{label} (in process {os.path.basename(proc_path)})"
+                        if desc not in leaked_accounts:
+                            leaked_accounts.append(desc)
+        except Exception:
+            pass
+
+    # 3. Scan shell history if present
+    hist_candidates = []
+    fake_hist = env.get("FAKE_SHELL_HISTORY")
+    if fake_hist:
+        hist_candidates.append(fake_hist)
+    else:
+        home = env.get("HOME")
+        if home:
+            for fname in (".bash_history", ".zsh_history", ".local/share/fish/fish_history"):
+                p = os.path.join(home, fname)
+                if os.path.isfile(p):
+                    hist_candidates.append(p)
+
+    for hist_path in hist_candidates:
+        try:
+            with open(hist_path, "r", errors="replace") as f:
+                content = f.read()
+                for sec, label in secret_to_label.items():
+                    if sec in content:
+                        desc = f"{label} (in shell history {os.path.basename(hist_path)})"
+                        if desc not in leaked_accounts:
+                            leaked_accounts.append(desc)
+        except Exception:
+            pass
+
+    if leaked_accounts:
+        return [
+            AuditFinding(
+                rule_id="SEC-007",
+                severity="HIGH",
+                title="Secret Key Leaked in Process Environment or Shell History",
+                accounts=sorted(leaked_accounts),
+                description="Plaintext secret seeds were identified in process environment variables or shell history logs.",
+                recommendation="Rotate affected secrets and purge shell history / environment configurations.",
+            )
+        ]
+    return []
+
+
+def generate_rotation_advice(
+    report: AuditReport,
+    tokens: list[OtpParameters],
+) -> list[dict[str, Any]]:
+    """Generate cryptographically secure rotation recommendations for vulnerable tokens."""
+    flagged_labels = set()
+    reasons: dict[str, str] = {}
+    for f in report.findings:
+        if f.severity in ("CRITICAL", "HIGH"):
+            for acc in f.accounts:
+                # Strip metadata suffixes like [length: ...]
+                base_acc = re.sub(r"\s*\[[^\]]+\]\s*$", "", acc).strip()
+                flagged_labels.add(base_acc)
+                reasons[base_acc] = f.title
+
+    rotations: list[dict[str, Any]] = []
+    for t in tokens:
+        label = _token_label(t)
+        if (
+            label in flagged_labels
+            or t.account in flagged_labels
+            or (t.issuer and t.issuer in flagged_labels)
+        ):
+            # Generate new 160-bit (20 bytes -> 32 Base32 chars) high-entropy secret
+            new_bytes = secrets.token_bytes(20)
+            new_secret = base64.b32encode(new_bytes).decode("ascii").rstrip("=")
+            rot = {
+                "account": t.account,
+                "issuer": t.issuer,
+                "label": label,
+                "reason": reasons.get(label, "Security finding"),
+                "old_algorithm": t.algorithm,
+                "recommended_algorithm": "SHA256" if t.algorithm == "SHA1" else t.algorithm,
+                "new_secret": new_secret,
+                "new_uri": f"otpauth://totp/{label}?secret={new_secret}&algorithm={t.algorithm}&digits={t.digits}",
+            }
+            rotations.append(rot)
+    return rotations
+
+
+def audit_tokens(
+    tokens: list[OtpParameters],
+    backend: str = "local",
+    env: dict[str, str] | None = None,
+    rotate: bool = False,
+) -> AuditReport:
+    """Analyze a list of OTP tokens for security vulnerabilities, entropy, and hygiene issues."""
     findings: list[AuditFinding] = []
     score = 100
 
@@ -96,6 +308,8 @@ def audit_tokens(tokens: list[OtpParameters], backend: str = "local") -> AuditRe
     # 2. Check for Weak / Low-Entropy Secrets and Known Sample Seeds (HIGH)
     weak_accounts = []
     test_seed_accounts = []
+    low_entropy_accounts = []
+
     for t in tokens:
         label = _token_label(t)
         try:
@@ -103,12 +317,14 @@ def audit_tokens(tokens: list[OtpParameters], backend: str = "local") -> AuditRe
         except Exception:
             norm_secret = t.secret
 
+        entropy = calculate_shannon_entropy(norm_secret)
+
         if norm_secret in KNOWN_TEST_SEEDS:
             test_seed_accounts.append(label)
         elif len(norm_secret) < 16:
             weak_accounts.append(f"{label} [length: {len(norm_secret)} chars / <80 bits]")
-        elif len(set(norm_secret)) <= 2:
-            weak_accounts.append(f"{label} [low character diversity]")
+        elif entropy < 2.5 and len(norm_secret) >= 16:
+            low_entropy_accounts.append(f"{label} [Shannon entropy: {entropy:.2f} bits/char]")
 
     if test_seed_accounts:
         findings.append(
@@ -135,6 +351,19 @@ def audit_tokens(tokens: list[OtpParameters], backend: str = "local") -> AuditRe
             )
         )
         score -= 10 * len(weak_accounts)
+
+    if low_entropy_accounts:
+        findings.append(
+            AuditFinding(
+                rule_id="SEC-005",
+                severity="HIGH",
+                title="Low Shannon Entropy Secret (<2.5 bits/char)",
+                accounts=sorted(low_entropy_accounts),
+                description="Secret exhibits highly repetitive patterns or predictable character distributions.",
+                recommendation="Replace with a cryptographically secure pseudo-random Base32 seed.",
+            )
+        )
+        score -= 10 * len(low_entropy_accounts)
 
     # 3. Check for Non-Standard / Deprecated Algorithms (MEDIUM)
     algo_accounts = []
@@ -198,6 +427,29 @@ def audit_tokens(tokens: list[OtpParameters], backend: str = "local") -> AuditRe
         )
         score -= 2 * len(hygiene_accounts)
 
+    # 6. Environmental Leak Scans (T-AUTH-118)
+    if env:
+        leak_findings = scan_environment_leaks(tokens, env)
+        for lf in leak_findings:
+            findings.append(lf)
+            score -= 15 * len(lf.accounts)
+
+        # 7. Time Drift Analysis (T-AUTH-117)
+        drift = check_time_drift(env)
+        if not drift["synchronized"] or drift["offset_seconds"] >= 1.0:
+            skew_sec = drift["offset_seconds"]
+            findings.append(
+                AuditFinding(
+                    rule_id="SEC-006",
+                    severity=drift["skew_severity"],
+                    title="Host Time Drift Exceeds RFC 6238 Synchronization Window",
+                    accounts=["System Clock"],
+                    description=f"System clock is skewed by {skew_sec:+.2f} seconds relative to reference NTP.",
+                    recommendation="Synchronize system time via timedatectl, chrony, or NTP.",
+                )
+            )
+            score -= 15
+
     # Calculate final score and grade
     final_score = max(0, min(100, score))
     if final_score >= 95:
@@ -217,13 +469,18 @@ def audit_tokens(tokens: list[OtpParameters], backend: str = "local") -> AuditRe
     severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFO": 4}
     findings.sort(key=lambda f: severity_order.get(f.severity, 99))
 
-    return AuditReport(
+    report = AuditReport(
         backend=backend,
         total_tokens=len(tokens),
         findings=findings,
         score=final_score,
         grade=grade,
     )
+
+    if rotate:
+        report.rotations = generate_rotation_advice(report, tokens)
+
+    return report
 
 
 def format_audit_report(report: AuditReport) -> str:
@@ -263,5 +520,15 @@ def format_audit_report(report: AuditReport) -> str:
     lines.append(f"  Medium Severity Issues:   {med}")
     lines.append(f"  Hygiene Notices:          {low}")
     lines.append(f"  Security Score:           {report.score} / 100 (Grade: {report.grade})")
+
+    if report.rotations:
+        lines.append("-" * 78)
+        lines.append("Guided Secret Rotation Recommendations:")
+        for r in report.rotations:
+            lines.append(f"  * Account: {r['label']}")
+            lines.append(f"    Reason:  {r['reason']}")
+            lines.append(f"    New Key: {r['new_secret']}")
+            lines.append(f"    New URI: {r['new_uri']}")
+
     lines.append("=" * 78)
     return "\n".join(lines) + "\n"

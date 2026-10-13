@@ -1,7 +1,7 @@
 {
   "name": "otp-local-docs",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.6.0",
   "devDependencies": {
     "markdownlint-cli2": "0.23.3"
   }
