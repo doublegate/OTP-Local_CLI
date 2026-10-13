@@ -580,38 +580,30 @@ Reusable, project-agnostic named patterns. See `docs/knowledge/95-named-pattern-
 
 ## Project: Authy-to-1Password_Local
 
-- **What it is:** Local planning and documentation for migrating Authy TOTP accounts to 1Password with desktop, mobile, browser, and CLI access.
-- **Current stack:** Python 3.14 stdlib package on CachyOS / Arch Linux. CLI/TUI, fish wrappers, reversible offline installer, explicit pass-otp/GPG and totpm local-mode adapters, hidden local enrollment and bundled guides are implemented. Private recovery, hardware and inventory gates remain open. No CI configured.
-- **Build / test / lint:** Prepare the project .venv and local npm tools as in docs/05-development-and-testing.md, then run `bash scripts/check.sh`. The gate runs synthetic unittest, branch coverage, Ruff, ShellCheck, Markdown/link/task/hash checks, builds and isolated wheel smoke. Real vaults are never test dependencies.
-- **Documentation checks:** Run `python scripts/check_docs.py`; verify local Markdown links and status consistency. Doctor validates agent configuration, not host or migration readiness.
-- **Implementation baseline:** Read `docs/00-index.md` and the relevant numbered specification before development. The accepted companion is Python 3.14 stdlib, with thin fish wrappers and a standard-library curses TUI. `ROADMAP.md` and `to-dos/README.md` route the six-phase, thirteen-sprint plan.
-- **Git boundary:** Standalone local repository initialized on main with no commit/remote. The sandbox presents an empty read-only .git mount and may resolve Git to the parent workspace; verify actual host boundaries before Git work. No staging, commit or publication unless requested.
+- **What it is:** Local terminal companion, migration engine, and security layer for accessing two-factor authentication (TOTP/HOTP) tokens across 1Password, local GPG `pass-otp`, Apple Secure Enclave & macOS Keychain, hardware TPM 2.0 enclaves, and YubiKeys.
+- **Current stack:** Python 3.14 package on Linux (CachyOS/Arch, Ubuntu, Debian, Fedora) and macOS (Darwin Apple Silicon and Intel). Textual TUI dashboard, CLI commands, fish wrappers, reversible offline installer, six credential backends (1Password, pass-otp/GPG, totpm/TPM 2.0, YubiKey OATH, hardware TPM 2.0, and macOS Keychain via `/usr/bin/security`).
+- **Build / test / lint:** Prepare the project .venv and local npm tools as in docs/05-development-and-testing.md, then run `ruff check src tests scripts`, `ruff format --check src tests scripts`, `npx markdownlint-cli2`, `python scripts/check_docs.py`, `python scripts/bundle_guides.py --check`, `pytest tests -v`, and `python scripts/smoke_package.py`. The full suite contains 718 tests with 100% pass rate.
+- **Documentation & Linting checks:** Run `python scripts/check_docs.py` and `npx markdownlint-cli2`. Note: `.markdownlint-cli2.jsonc` requires `"MD024": { "siblings_only": true }` to permit standard Keep a Changelog subheadings (`Added`, `Fixed`, `Changed`) across multiple release versions in `CHANGELOG.md`.
+- **macOS Hardware & Doctor Remediation:** Apple hardware utilizes Apple Secure Enclave Processor (SEP) and macOS Keychain (`/usr/bin/security`) rather than PC TPM 2.0. On Darwin, discrete PC TPM components (`totpm`, `tpm2-totp`, `tpm-device`) are reported as `not-applicable`. `otp-local doctor --install` (or `--fix`) automatically remediates missing capabilities via Homebrew with 10MB process output caps and 900s execution deadlines.
+- **Packaging & Installation:** Packaged as `authy-local` v1.1.0. For modern environments enforcing PEP 668, recommend `uv tool install --editable .` or `pipx install .`.
 
 ### Intended operating model
 
 - The runbook prefers one authoritative TOTP seed in 1Password, with terminal access through `op item get ITEM --otp`.
-- Both local stores are selected for a privately chosen subset. Require the fingerprinted locally hardened pass-otp extension, dedicated GPG key/restore acceptance and totpm local mode with independent machine-loss recovery. Synthetic tests do not establish real adoption.
-- Preserve 1Password terminal session identity. Vendor authorization is per account/terminal, expires after 10 minutes idle or 12 hours total and is revoked on lock; do not promise approval only on lock/reboot or introduce keepalive requests.
-- Authy remains retained by explicit operator decision. No retirement, real enrollment, key generation or TPM provisioning through agent tools.
-- Account migration is performed one service at a time. Preserve recovery access and verify a fresh login before retiring the corresponding Authy entry.
-
-### Secret handling
-
+- Supported backends: 1Password (`onepassword`), local GPG (`pass-otp`), hardware TPM 2.0 (`totpm`), physical YubiKey (`yubikey`), TPM2 (`tpm2-totp`), and macOS Keychain (`keychain`).
+- Preserve 1Password terminal session identity. Vendor authorization is per account/terminal, expires after 10 minutes idle or 12 hours total and is revoked on lock.
+- All secrets are piped via standard input into memory-locked in-process TOTP derivation; never pass secrets in process arguments (`argv`), environment variables, or error diagnostics.
 - Never place real TOTP seeds, recovery codes, QR images, plaintext exports, vault contents, or credentials in this workspace, Git, logs, or model context.
-- Do not put TOTP seeds or export passwords in environment variables; prefer interactive secret entry. This refines the shared core's general environment-variable guidance.
-- Setup of agent guidance does not authorize account enrollment changes, token deletion, or execution of the runbook's host-installation commands.
-- Keep account inventories and account-specific progress outside the workspace too; record only aggregate status here. Future automated tests must use synthetic credentials.
 
 ### Where things live
 
-- `ref-docs/Authy-to-1Password-and-Local-CLI-TOTP-Migration-Runbook-v2.md` — existing migration reference, candidate CLI helpers, safety checks, and completion criteria. Its commands describe proposed workflows, not completed actions.
 - `README.md` — project entry point and navigation.
 - `PROJECT-STATUS.md` — authoritative project progress and open decisions; update when evidence changes.
+- `CHANGELOG.md` — single source of truth for user-visible changes across releases (v1.0.0, v1.1.0).
 - `docs/00-index.md` — architecture, requirements, CLI/security contracts, installation, migration, operations and ADR navigation.
-- `docs/10-research-and-host-evidence.md` — dated upstream and read-only host evidence; authenticated readiness remains unverified.
-- `ROADMAP.md` and `to-dos/README.md` — task allocation and delivery sequence; optional stores may be explicitly skipped.
-- `docs/2026-10-11-runbook-clarification.md` — resolves conflicting runbook defaults and flags helper-review needs. Preserve the original reference; add dated supplements for corrections.
-- `to-dos/00-foundation.md` — bounded operational preflight plan, with an explicit stop before account changes.
+- `docs/03-cli-specification.md` — CLI command and backend specifications.
+- `docs/08-optional-backends.md` — hardware TPM, GPG pass-otp, and macOS Keychain & Apple Secure Enclave specifications.
+- `docs/11-tui.md` — Textual TUI design, keybindings, and modal hierarchies.
 - `AGENTS.md` — canonical agent guidance; `CLAUDE.md` and `GEMINI.md` symlink to it. Edit project guidance only between the managed markers.
 <<< MC-PROJECT-END >>>
 
