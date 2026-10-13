@@ -603,9 +603,9 @@ class TestDoctorAdversarial(unittest.TestCase):
     """Adversarial tests for doctor capability assessment and clock status."""
 
     def test_doctor_platform_and_python_versions(self) -> None:
-        """Verify report identifies non-linux or non-3.14 platforms as missing."""
+        """Verify report identifies non-supported platforms or non-3.14 platforms as missing."""
         with (
-            patch("sys.platform", "darwin"),
+            patch("sys.platform", "freebsd"),
             patch("authy_local.doctor.probe", return_value={"state": "available"}),
             patch(
                 "authy_local.backends.local.capabilities",
@@ -615,6 +615,17 @@ class TestDoctorAdversarial(unittest.TestCase):
             res = doctor.report({"PATH": "/bin"})
             self.assertEqual(res["platform"]["state"], "missing")
             self.assertEqual(doctor.status(res), 3)
+
+        with (
+            patch("sys.platform", "darwin"),
+            patch("authy_local.doctor.probe", return_value={"state": "available"}),
+            patch(
+                "authy_local.backends.local.capabilities",
+                return_value={"pass": {"state": "missing"}, "totpm": {"state": "missing"}},
+            ),
+        ):
+            res = doctor.report({"PATH": "/bin"})
+            self.assertEqual(res["platform"]["state"], "available")
 
         with (
             patch("sys.version_info", (3, 13, 0)),

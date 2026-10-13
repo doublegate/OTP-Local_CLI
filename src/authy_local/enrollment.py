@@ -7,6 +7,7 @@ import hmac
 import re
 import shutil
 import struct
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -258,16 +259,32 @@ def decode_qr_image_file(path: str | Path, env: dict[str, str]) -> str:
 
 
 def get_clipboard_image(env: dict[str, str]) -> bytes:
-    """Retrieve raw image bytes from Wayland clipboard using wl-paste."""
+    """Retrieve raw image bytes from desktop clipboard."""
+    clean_env = {
+        k: v for k, v in env.items() if not k.startswith("BASH_") and k not in {"SHELL", "PROMPT"}
+    }
+    if sys.platform == "darwin":
+        pngpaste = shutil.which("pngpaste", path=env.get("PATH", ""))
+        if pngpaste is None:
+            raise AppError(3)
+        result = run(
+            [pngpaste, "-"],
+            env=clean_env,
+            timeout=8,
+            stdout_cap=25 * 1024 * 1024,
+            stderr_cap=4096,
+            preserve_session=True,
+        )
+        if result.returncode != 0 or not result.stdout:
+            raise AppError(2)
+        return result.stdout
+
     if not env.get("WAYLAND_DISPLAY"):
         raise AppError(3)
     wl_paste = shutil.which("wl-paste", path=env.get("PATH", ""))
     if wl_paste is None:
         raise AppError(3)
 
-    clean_env = {
-        k: v for k, v in env.items() if not k.startswith("BASH_") and k not in {"SHELL", "PROMPT"}
-    }
     result = run(
         [wl_paste, "-t", "image/png"],
         env=clean_env,
@@ -282,16 +299,32 @@ def get_clipboard_image(env: dict[str, str]) -> bytes:
 
 
 def get_clipboard_text(env: dict[str, str]) -> str:
-    """Retrieve text from Wayland clipboard using wl-paste."""
+    """Retrieve text from desktop clipboard."""
+    clean_env = {
+        k: v for k, v in env.items() if not k.startswith("BASH_") and k not in {"SHELL", "PROMPT"}
+    }
+    if sys.platform == "darwin":
+        pbpaste = shutil.which("pbpaste", path=env.get("PATH", ""))
+        if pbpaste is None:
+            raise AppError(3)
+        result = run(
+            [pbpaste],
+            env=clean_env,
+            timeout=5,
+            stdout_cap=32768,
+            stderr_cap=4096,
+            preserve_session=True,
+        )
+        if result.returncode != 0 or not result.stdout:
+            raise AppError(2)
+        return result.stdout.decode("utf-8", errors="replace").strip()
+
     if not env.get("WAYLAND_DISPLAY"):
         raise AppError(3)
     wl_paste = shutil.which("wl-paste", path=env.get("PATH", ""))
     if wl_paste is None:
         raise AppError(3)
 
-    clean_env = {
-        k: v for k, v in env.items() if not k.startswith("BASH_") and k not in {"SHELL", "PROMPT"}
-    }
     result = run(
         [wl_paste, "-t", "text/plain"],
         env=clean_env,

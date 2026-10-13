@@ -86,3 +86,35 @@ class TestClipboardScrubber(unittest.TestCase):
             copy_code("654321", self.env)
 
             mock_scrub.assert_called_once_with("654321", self.env, delay=45.0)
+
+    def test_darwin_copy_and_scrub(self):
+        """Verify macOS uses pbcopy/pbpaste and scrubs with empty input."""
+        mock_check = MagicMock(returncode=0, stdout=b"999888\n")
+        mock_clear = MagicMock(returncode=0, stdout=b"")
+
+        darwin_env = {"PATH": "/usr/bin:/bin"}
+        with (
+            patch("sys.platform", "darwin"),
+            patch("shutil.which", side_effect=lambda name, path="": f"/usr/bin/{name}"),
+            patch("authy_local.interaction.handoff") as mock_handoff,
+            patch("authy_local.interaction.run", side_effect=[mock_check, mock_clear]) as mock_run,
+        ):
+            copy_code("999888", darwin_env, scrub_delay=0.01)
+
+            mock_handoff.assert_called_once()
+            cmd = mock_handoff.call_args[0][0]
+            self.assertEqual(cmd, ["/usr/bin/pbcopy"])
+
+            time_slept = 0
+            while mock_run.call_count < 2 and time_slept < 1.0:
+                import time
+
+                time.sleep(0.02)
+                time_slept += 0.02
+
+            self.assertEqual(mock_run.call_count, 2)
+            first_cmd = mock_run.call_args_list[0].args[0]
+            self.assertIn("pbpaste", first_cmd[0])
+            second_cmd = mock_run.call_args_list[1].args[0]
+            self.assertIn("pbcopy", second_cmd[0])
+            self.assertEqual(mock_run.call_args_list[1].kwargs.get("input_data"), b"")

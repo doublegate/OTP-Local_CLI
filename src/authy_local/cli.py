@@ -172,7 +172,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             return 0
         if args.command == "tui":
             if (
-                sys.platform != "linux"
+                sys.platform not in ("linux", "darwin")
                 or sys.version_info[:2] != (3, 14)
                 or not has_terminal(stdin)
                 or not stdout.isatty()
@@ -199,7 +199,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             if not args.apply:
                 raise AppError(2)
             if (
-                sys.platform != "linux"
+                sys.platform not in ("linux", "darwin")
                 or sys.version_info[:2] != (3, 14)
                 or not has_terminal(stdin)
             ):
@@ -301,7 +301,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             notice(stderr, "Enrollment completed. Verify a fresh login and recovery privately.")
             return 0
         if args.command == "pick":
-            if sys.platform != "linux" or sys.version_info[:2] != (3, 14):
+            if sys.platform not in ("linux", "darwin") or sys.version_info[:2] != (3, 14):
                 raise AppError(3)
             env = dict(os.environ)
 
@@ -381,7 +381,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 notify_desktop("Authy Local", "OTP copied to clipboard (clears in 45s)", env)
             return 0
         if args.command == "import":
-            if sys.platform != "linux" or sys.version_info[:2] != (3, 14):
+            if sys.platform not in ("linux", "darwin") or sys.version_info[:2] != (3, 14):
                 raise AppError(3)
             env = dict(os.environ)
 
@@ -651,7 +651,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             stdout.flush()
             return 0
         if args.command == "agent":
-            if sys.platform != "linux" or sys.version_info[:2] != (3, 14):
+            if sys.platform not in ("linux", "darwin") or sys.version_info[:2] != (3, 14):
                 raise AppError(3)
             from .agent import SessionAgent, send_agent_request
 
@@ -691,7 +691,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 return 0
         if args.command == "unlock":
             if (
-                sys.platform != "linux"
+                sys.platform not in ("linux", "darwin")
                 or sys.version_info[:2] != (3, 14)
                 or not has_terminal(stdin)
             ):
@@ -712,7 +712,7 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
                 args.vault or "",
             )
 
-        if sys.platform != "linux" or sys.version_info[:2] != (3, 14):
+        if sys.platform not in ("linux", "darwin") or sys.version_info[:2] != (3, 14):
             raise AppError(3)
 
         copying = args.command == "copy" or (args.command == "select" and args.copy)

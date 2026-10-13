@@ -239,9 +239,14 @@ class CliEdges(unittest.TestCase):
         self.assertEqual(self.calls(), [])
 
     def test_doctor_rejects_unsupported_platform(self):
-        with patch.object(doctor.sys, "platform", "darwin"):
+        with patch.object(doctor.sys, "platform", "freebsd"):
             status, report = self.inspect_doctor()
         self.assertEqual((status, report["platform"]["state"]), (3, "missing"))
+
+    def test_doctor_accepts_darwin_platform(self):
+        with patch.object(doctor.sys, "platform", "darwin"):
+            status, report = self.inspect_doctor()
+        self.assertEqual(report["platform"]["state"], "available")
 
     def test_doctor_rejects_unsupported_python(self):
         with patch.object(doctor.sys, "version_info", (3, 13, 0)):
@@ -252,7 +257,7 @@ class CliEdges(unittest.TestCase):
         out, err = io.StringIO(), io.StringIO()
         with (
             patch.dict(os.environ, self.env, clear=True),
-            patch.object(cli.sys, "platform", "darwin"),
+            patch.object(cli.sys, "platform", "freebsd"),
             patch.object(cli, "has_terminal", return_value=True),
         ):
             status = cli.main([*SHOW, "--allow-pipe"], stdout=out, stderr=err)

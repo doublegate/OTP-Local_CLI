@@ -11,7 +11,7 @@ from .processes import run
 
 def report(env: dict[str, str]) -> dict:
     result = {
-        "platform": {"state": "available" if sys.platform == "linux" else "missing"},
+        "platform": {"state": "available" if sys.platform in ("linux", "darwin") else "missing"},
         "python": {
             "state": "available" if sys.version_info[:2] == (3, 14) else "missing",
             "version": platform.python_version(),
@@ -23,6 +23,12 @@ def report(env: dict[str, str]) -> dict:
     for name in ("fish", "fzf", "wl-copy", "qrencode"):
         path = shutil.which(name, path=env.get("PATH", ""))
         result[name] = {"state": "available", "path": path} if path else {"state": "missing"}
+
+    if sys.platform == "darwin":
+        pbcopy_path = shutil.which("pbcopy", path=env.get("PATH", ""))
+        if pbcopy_path:
+            result["wl-copy"] = {"state": "available", "path": pbcopy_path}
+            result["pbcopy"] = {"state": "available", "path": pbcopy_path}
 
     pinentry_path = (
         shutil.which("pinentry", path=env.get("PATH", ""))
@@ -114,6 +120,8 @@ def report(env: dict[str, str]) -> dict:
         except AppError as error:
             if error.exit_code == 130:
                 raise
+    elif sys.platform == "darwin":
+        result["clock"] = {"state": "available"}
     return result
 
 

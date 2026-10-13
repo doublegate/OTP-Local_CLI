@@ -3,6 +3,7 @@
 import json
 import re
 import shutil
+import sys
 import threading
 import time
 import unicodedata
@@ -22,6 +23,8 @@ def capability(name: str, env: dict[str, str]) -> str:
 
 
 def clipboard_capability(env: dict[str, str]) -> str:
+    if sys.platform == "darwin":
+        return capability("pbcopy", env)
     if not env.get("WAYLAND_DISPLAY"):
         raise AppError(3)
     return capability("wl-copy", env)
@@ -43,6 +46,20 @@ def scrub_clipboard(
     def _worker():
         try:
             time.sleep(delay)
+            if sys.platform == "darwin":
+                pbpaste = shutil.which("pbpaste", path=env.get("PATH", ""))
+                pbcopy = shutil.which("pbcopy", path=env.get("PATH", ""))
+                if not pbpaste or not pbcopy:
+                    return
+                check = run([pbpaste], env=child_environment(env), timeout=2, stdout_cap=128)
+                if (
+                    check.returncode == 0
+                    and check.stdout.decode("ascii", errors="ignore").strip()
+                    == expected_code.strip()
+                ):
+                    run([pbcopy], env=child_environment(env), timeout=2, input_data=b"")
+                return
+
             wl_paste = shutil.which("wl-paste", path=env.get("PATH", ""))
             wl_copy = shutil.which("wl-copy", path=env.get("PATH", ""))
             if not wl_paste or not wl_copy or not env.get("WAYLAND_DISPLAY"):
@@ -72,11 +89,18 @@ def scrub_clipboard(
 
 def copy_code(code: str, env: dict[str, str], *, scrub_delay: float = 45.0) -> None:
     executable = clipboard_capability(env)
-    handoff(
-        [executable, "--type", "text/plain"],
-        env=child_environment(env),
-        input_data=code.encode("ascii"),
-    )
+    if sys.platform == "darwin":
+        handoff(
+            [executable],
+            env=child_environment(env),
+            input_data=code.encode("ascii"),
+        )
+    else:
+        handoff(
+            [executable, "--type", "text/plain"],
+            env=child_environment(env),
+            input_data=code.encode("ascii"),
+        )
     scrub_clipboard(code, env, delay=scrub_delay)
 
 
