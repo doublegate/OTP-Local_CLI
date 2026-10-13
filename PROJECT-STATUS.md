@@ -48,6 +48,7 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | T-AUTH-009: Linux PAM integration & v1.4.0 release | Complete | S-AUTH-9.2 complete; native C PAM module, Makefile, and doctor --pam pass |
 | T-AUTH-010: Bitwarden & KeePassXC Multi-Vault Federation | Complete | S-AUTH-10.1 and S-AUTH-10.2 complete; Bitwarden, KeePassXC, and FederatedResolver pass |
 | T-AUTH-011: Memory Forensics Hardening & Security Auditor v2 | Complete | S-AUTH-11.1 and S-AUTH-11.2 complete; mlock, madvise_dontdump, SecureBuffer, and Auditor v2 pass |
+| T-AUTH-012: Universal Async Core, Plugin Engine & v2.0.0 LTS | Complete | S-AUTH-12.1 and S-AUTH-12.2 complete; AsyncCore, JSON-RPC, pluggy plugins, and frozen API pass |
 
 ## Phase and capability matrix
 
@@ -65,16 +66,17 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | 9 Daemon IPC & PAM | Complete | Sprints 9.1 and 9.2 complete; resident daemon, CBOR IPC, SHM ring buffer, and Linux PAM module pass |
 | 10 Multi-Vault Federation | Complete | Sprints 10.1 and 10.2 complete; Bitwarden, KeePassXC, and multi-vault federation pass |
 | 11 Security auditor v2 | Complete | Sprints 11.1 and 11.2 complete; memory forensics hardening, entropy analysis, and rotation advisor pass |
+| 12 Universal async & plugins | Complete | Sprints 12.1 and 12.2 complete; non-blocking async core, pluggy plugin engine, and public API freeze pass |
 
-Package version is 1.6.0.
+Package version is 2.0.0.
 
 ## Metrics and timeline
 
 | Metric | Snapshot | Source |
 |---|---|---|
 | Derived specification | Fourteen numbered guides and eight ADRs | docs/00-index.md |
-| Delivery plan | Eleven phases; twenty-three sprints; 80 completed tasks | to-dos/README.md and sprint files |
-| Software/test/release | v1.6.0 (Phase 11 complete) / 879 tests pass / 100% pass rate | tests/ |
+| Delivery plan | Twelve phases; twenty-five sprints; 88 completed tasks | to-dos/README.md and sprint files |
+| Software/test/release | v2.0.0 (Phase 12 complete) / 902 tests pass / 100% pass rate | tests/ |
 | Coverage | 94% aggregate; validator/1Password adapter 100% | Branch-inclusive coverage report; blocking floors 90% / 100% |
 | Account outcomes | Pilot: 1 migrated / 0 blocked / 0 pending; full inventory unknown | Checkpoint B operator attestation; no private inventory read |
 | Documentation validation | Authored files; links, task IDs and lint pass; reference hash unchanged | docs/00-index.md |

@@ -1,6 +1,6 @@
 # Phase 12: Universal Async Architecture, Extensible Plugin Engine, and v2.0.0 Freeze
 
-Status: Planned for release v2.0.0. See [delivery index](README.md) and [ROADMAP.md](../ROADMAP.md).
+Status: Complete; delivered in release v2.0.0. See [delivery index](README.md) and [ROADMAP.md](../ROADMAP.md).
 
 ## Objective
 

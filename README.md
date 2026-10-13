@@ -1,6 +1,6 @@
 # OTP-Local CLI
 
-[![Release](https://img.shields.io/badge/release-v1.6.0-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v1.6.0)
+[![Release](https://img.shields.io/badge/release-v2.0.0--LTS-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v2.0.0)
 [![Python](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](README.md#cross-platform-installation)
@@ -149,6 +149,10 @@ Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all ex
 
 ## Features
 
+- **Universal Non-Blocking Async Core**: Complete asynchronous rewrite (`authy_local.async_core`) with `AsyncBackend` ABC, `AsyncSyncAdapter`, and `AsyncFederatedResolver` achieving >= 3.0x throughput speedups over multi-vault queries.
+- **Streaming JSON-RPC 2.0 / CBOR Protocol**: High-speed bidirectional daemon and client communication with custom method dispatching and asynchronous notifications.
+- **Extensible Hook-Based Plugin Engine**: Pluggy-powered plugin manager (`authy_local.plugins`) supporting custom backends (`otp_local_register_backend`), token generation events (`otp_local_on_token_generated`), UI actions, and custom security audit rules with fail-closed allowlist configuration (`plugins.json`).
+- **Frozen Public Python API**: Semantically versioned, stable public Python interface under `authy_local` with 100% type annotation and backward compatibility shims for v1.x scripts.
 - **Multi-Backend Architecture**: Seamlessly query or switch between 1Password, Bitwarden, KeePassXC, `pass-otp`, macOS Keychain (Apple Secure Enclave), Windows DPAPI & Credential Manager, FIDO2 CTAP 2.1 hardware keys, TPM 2.0 (`totpm`), and YubiKey.
 - **Bitwarden & KeePassXC Integration**: Direct native support for Bitwarden vaults (`bw` CLI with volatile session manager) and KeePassXC KDBX4 databases (master passwords and keyfile credentials).
 - **Federated Multi-Vault Resolver**: High-performance concurrent multi-vault aggregation across all configured backends (`otp-local select --backend federated`), with origin badges (`[1P]`, `[BW]`, `[KP]`, `[GPG]`, `[TPM]`), cross-vault deduplication, and fail-closed fallback code retrieval.
