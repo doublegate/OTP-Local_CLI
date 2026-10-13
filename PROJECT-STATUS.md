@@ -30,7 +30,7 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | Host prerequisites | Read-only snapshot verified | docs/2026-10-12-phase-0-readiness.md |
 | Human 1Password readiness | Operator-attested pass | Desktop unlock and scoped CLI approval; Checkpoint A disposable acceptance passed |
 | Account migration | Pilot migrated, operator-attested | pilot-001: total 1, migrated 1, blocked 0, pending 0; full inventory unknown |
-| Automated tests/lint/build | All quality gates pass | 788 tests; 100% pass rate; ruff clean, markdownlint clean |
+| Automated tests/lint/build | All quality gates pass | 799 tests; 100% pass rate; ruff clean, markdownlint clean |
 | Version control | Standalone local main; no remote | Host-level Git verification; no remote push requested |
 
 ## Milestones
@@ -45,6 +45,7 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | T-AUTH-006: Windows DPAPI & Shell integration | Complete | Windows DPAPI, PowerShell, NuShell, and WSL2 bridge pass all quality gates |
 | T-AUTH-007: FIDO2 CTAP2.1 & Touch Presence integration | Complete | FIDO2 CTAP 2.1 hardware backend, multi-token redundancy, Fido2TouchModal, and TUI integration pass |
 | T-AUTH-008: High-speed daemon IPC & shared memory | Complete | S-AUTH-9.1 complete; resident daemon, CBOR IPC, and POSIX SHM ring buffer pass |
+| T-AUTH-009: Linux PAM integration & v1.4.0 release | Complete | S-AUTH-9.2 complete; native C PAM module, Makefile, and doctor --pam pass |
 
 ## Phase and capability matrix
 
@@ -59,17 +60,17 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | 6 Interactive enrollment | Complete | Sprints 6.1 and 6.2 complete; secret string, QR decoding, 1Password tagged "OTP", and Textual TUI AddOtpModal pass test gates |
 | 7 Windows & shells | Complete | Sprints 7.1 and 7.2 complete; Windows DPAPI, PowerShell, NuShell, and WSL2 IPC bridge gates pass |
 | 8 FIDO2 hardware keys | Complete | Sprints 8.1 and 8.2 complete; CTAP 2.1 HMAC-secret, multi-token redundancy, Fido2TouchModal, and TUI gates pass |
-| 9 Daemon IPC & PAM | In progress (Sprint 9.1 complete) | S-AUTH-9.1 complete; resident daemon, CBOR IPC, and SHM ring buffer gates pass |
+| 9 Daemon IPC & PAM | Complete | Sprints 9.1 and 9.2 complete; resident daemon, CBOR IPC, SHM ring buffer, and Linux PAM module pass |
 
-Package version is 1.1.0.
+Package version is 1.4.0.
 
 ## Metrics and timeline
 
 | Metric | Snapshot | Source |
 |---|---|---|
 | Derived specification | Fourteen numbered guides and eight ADRs | docs/00-index.md |
-| Delivery plan | Nine phases; nineteen sprints; 64 completed tasks | to-dos/README.md and sprint files |
-| Software/test/release | v1.1.0 (Phase 9 Sprint 9.1 complete) / 788 tests pass / 100% pass rate | tests/ |
+| Delivery plan | Nine phases; nineteen sprints; 68 completed tasks | to-dos/README.md and sprint files |
+| Software/test/release | v1.4.0 (Phase 9 complete) / 799 tests pass / 100% pass rate | tests/ |
 | Coverage | 94% aggregate; validator/1Password adapter 100% | Branch-inclusive coverage report; blocking floors 90% / 100% |
 | Account outcomes | Pilot: 1 migrated / 0 blocked / 0 pending; full inventory unknown | Checkpoint B operator attestation; no private inventory read |
 | Documentation validation | Authored files; links, task IDs and lint pass; reference hash unchanged | docs/00-index.md |

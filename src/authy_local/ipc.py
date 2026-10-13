@@ -111,9 +111,14 @@ def _recv_all(sock: socket.socket, length: int) -> bytes:
     return bytes(data)
 
 
-def send_framed_message(sock: socket.socket, message: dict) -> None:
-    """Serialize and transmit 4-byte big-endian length-prefixed CBOR message."""
-    payload = encode_cbor(message)
+def send_framed_message(sock: socket.socket, message: dict, encoding: str = "cbor") -> None:
+    """Serialize and transmit 4-byte big-endian length-prefixed message."""
+    if encoding == "json":
+        import json
+
+        payload = json.dumps(message).encode("utf-8")
+    else:
+        payload = encode_cbor(message)
     if len(payload) > MAX_IPC_MESSAGE_SIZE:
         raise ValueError(f"Payload size {len(payload)} exceeds maximum {MAX_IPC_MESSAGE_SIZE}")
     header = struct.pack(">I", len(payload))

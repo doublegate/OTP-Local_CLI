@@ -38,6 +38,11 @@ def parser() -> Parser:
     inspect = commands.add_parser("doctor", allow_abbrev=False)
     inspect.add_argument("--json", action="store_true")
     inspect.add_argument(
+        "--pam",
+        action="store_true",
+        help="Validate PAM subsystem, module installation, and daemon connectivity",
+    )
+    inspect.add_argument(
         "--install",
         "--fix",
         action="store_true",
@@ -190,6 +195,12 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
         with redirect_stdout(stdout), redirect_stderr(stderr):
             args = parser().parse_args(argv)
         if args.command == "doctor":
+            if getattr(args, "pam", False):
+                from .pam_check import doctor_pam_cli
+
+                return doctor_pam_cli(
+                    dict(os.environ), stdout=stdout, stderr=stderr, as_json=args.json
+                )
             if getattr(args, "install", False):
                 doctor.install_missing(dict(os.environ), stdout=stdout, stderr=stderr)
             result = doctor.report(dict(os.environ))

@@ -179,6 +179,7 @@ class DaemonServer:
             if not req or not isinstance(req, dict):
                 return
 
+            req_format = req.get("format", "cbor")
             action = req.get("action")
             self._last_active = time.time()
 
@@ -206,13 +207,15 @@ class DaemonServer:
             else:
                 resp = {"status": "error", "message": f"Unknown action: {action}"}
 
-            send_framed_message(conn, resp)
+            send_framed_message(conn, resp, encoding=req_format)
         except PermissionError:
             # Unauthorized UID caller - immediately close connection without response
             pass
         except Exception as exc:
             try:
-                send_framed_message(conn, {"status": "error", "message": str(exc)})
+                send_framed_message(
+                    conn, {"status": "error", "message": str(exc)}, encoding=req_format
+                )
             except Exception:
                 pass
         finally:

@@ -1,6 +1,6 @@
 # OTP-Local CLI
 
-[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/badge/release-v1.4.0-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v1.4.0)
 [![Python](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](README.md#cross-platform-installation)
@@ -9,7 +9,7 @@
 
 ![OTP-Local CLI Banner](assets/banner.svg)
 
-Local terminal companion, migration engine, and security layer for accessing two-factor authentication (TOTP/HOTP) tokens across 1Password, local GPG `pass-otp`, Apple Secure Enclave & macOS Keychain, hardware TPM 2.0 enclaves, and YubiKeys.
+Local terminal companion, migration engine, and security layer for accessing two-factor authentication (TOTP/HOTP) tokens across 1Password, local GPG `pass-otp`, Apple Secure Enclave & macOS Keychain, Windows DPAPI & Credential Manager, FIDO2 CTAP 2.1 hardware keys, TPM 2.0 enclaves, and YubiKeys.
 
 Designed for security engineers, operators, and developers who require instant, secure, and auditable OTP access in their local shell environment without persistent disk seed storage or vendor cloud lock-in.
 
@@ -25,41 +25,51 @@ Designed for security engineers, operators, and developers who require instant, 
 
 ## System Architecture
 
-The architecture isolates secret material inside designated secure hardware or credential stores. The CLI and TUI interact through an ephemeral local UNIX domain socket session daemon that holds zero unencrypted state on disk and enforces memory zeroization upon process termination.
+The architecture isolates secret material inside designated secure hardware or credential stores. The CLI, TUI, and PAM integration module interact through a resident UNIX domain socket daemon and zero-copy POSIX shared memory ring buffer that holds zero unencrypted state on disk and enforces memory zeroization upon process termination.
 
 ```mermaid
 flowchart TD
-    subgraph UI ["Operator Interfaces"]
+    subgraph UI ["Operator & System Interfaces"]
         CLI["CLI Commands (otp-local)"]
         TUI["Terminal UI (Textual TUI)"]
+        PAM["Linux PAM Module (sudo / SSH)"]
+        SHELL["PowerShell & NuShell Modules"]
         FISH["Fish Shell Functions (otp1p, otp1pc)"]
     end
 
     subgraph Core ["Local Agent & Security Enclave"]
         DISPATCH["Command Dispatcher & Argument Parser"]
-        AGENT["Ephemeral Session Agent (UDS Socket)"]
+        DAEMON["Resident Daemon (UDS Socket / CBOR)"]
+        SHM["Zero-Copy POSIX Shared Memory Ring Buffer"]
         SCRUBBER["Clipboard Auto-Wiper (30s Scrub Timer)"]
         AUDITOR["Weak Secret & Duplicate Hash Auditor"]
     end
 
     subgraph Backends ["Hardware & Cryptographic Backends"]
+        FIDO2["FIDO2 CTAP 2.1 (HMAC-Secret / PRF)"]
+        KEYCHAIN["macOS Keychain (Apple Secure Enclave)"]
+        DPAPI["Windows DPAPI & Credential Manager"]
+        TPM["totpm (TPM 2.0 Enclave)"]
         OP["1Password CLI (op)"]
         PASS["pass-otp (GPG Keyring)"]
-        KEYCHAIN["macOS Keychain (Secure Enclave)"]
-        TPM["totpm (TPM 2.0 Enclave)"]
         YUBI["YubiKey (oathtool / PCSC)"]
     end
 
     CLI --> DISPATCH
     TUI --> DISPATCH
+    SHELL --> DISPATCH
     FISH --> DISPATCH
+    PAM --> DAEMON
 
-    DISPATCH --> AGENT
-    AGENT --> OP
-    AGENT --> PASS
-    AGENT --> KEYCHAIN
-    AGENT --> TPM
-    AGENT --> YUBI
+    DISPATCH --> DAEMON
+    DAEMON --> SHM
+    DAEMON --> FIDO2
+    DAEMON --> KEYCHAIN
+    DAEMON --> DPAPI
+    DAEMON --> TPM
+    DAEMON --> OP
+    DAEMON --> PASS
+    DAEMON --> YUBI
 
     DISPATCH --> SCRUBBER
     DISPATCH --> AUDITOR
@@ -74,17 +84,17 @@ The sequence below illustrates the bounded lifecycle of an OTP request. Secret s
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Operator
-    participant Shell as Shell / TUI
-    participant Agent as Ephemeral Session Agent
+    actor User as Operator / System (PAM)
+    participant Shell as Shell / TUI / PAM
+    participant Agent as Resident Daemon & SHM
     participant Backend as Keyring / Hardware Enclave
     participant Clip as System Clipboard
 
-    User->>Shell: Request OTP (show / copy / tui)
-    Shell->>Agent: Query token via private socket (0600)
-    alt Cached Session Active
+    User->>Shell: Request OTP (show / copy / tui / sudo)
+    Shell->>Agent: Query token via private socket / SHM (<0.01ms)
+    alt Cached Token in Locked Memory
         Agent-->>Shell: Return TOTP code
-    else Session Locked / Idle Timeout
+    else Session Locked / Hardware Required
         Agent->>Backend: Authenticate & generate bounded OTP
         Backend-->>Agent: Bounded OTP code (6-8 digits)
         Agent-->>Shell: Forward OTP code
@@ -103,30 +113,36 @@ sequenceDiagram
 
 ## Performance Benchmarks
 
-Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all execution paths. In-process token computation completes in microseconds, while the ephemeral session agent reduces multi-account latency by over 99% compared to raw external CLI spawning.
+Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all execution paths. Zero-copy shared memory lookups execute in sub-0.01ms, while the resident daemon reduces multi-account verification latency by over 99% compared to raw external CLI spawning.
 
 ![Benchmark Latency Graph](assets/benchmark_timings.svg)
 
 | Execution Path | Mean Latency | Memory Footprint | Storage Persistence | Security Boundary |
 | --- | --- | --- | --- | --- |
+| **POSIX Shared Memory (`/dev/shm`)** | **0.009 ms** | 64 KiB ring buffer | None (RAM-only) | Kernel IPC / 0700 |
 | **In-Process RFC 6238** | **0.04 ms** | < 12 KB (ephemeral) | None (in-memory) | Process isolation |
-| **Session Agent IPC (UDS)** | **0.85 ms** | < 1.2 MB RSS | None (socket) | Mode 0600 socket |
+| **Resident Daemon IPC (CBOR/UDS)** | **0.15 ms** | < 2.4 MB locked RSS | None (socket) | Mode 0700 UDS socket |
 | **macOS Keychain (Secure Enclave)** | **8.4 ms** | System security service | Sealed to SEP / T2 | Apple Hardware Security |
+| **Windows DPAPI (`CryptProtectData`)** | **9.2 ms** | In-process Win32 API | DPAPI master key | OS User / Machine Key |
 | **Hardware TPM 2.0 (`totpm`)** | **12.1 ms** | External hardware | Sealed to PCRs | Silicon hardware |
 | **GPG `pass-otp`** | **18.5 ms** | `gpg-agent` memory | GPG encrypted files | Private GPG key |
+| **FIDO2 CTAP 2.1 (`hmac-secret`)** | **42.0 ms** | USB HID transaction | Hardware authenticator | Physical Touch Presence |
 | **1Password CLI (`op`)** | **285 ms** | App IPC boundary | Encrypted SQLite | Biometric / App unlock |
 
 ---
 
 ## Features
 
-- **Multi-Backend Architecture**: Seamlessly query or switch between 1Password, `pass-otp`, macOS Keychain (Apple Secure Enclave), TPM 2.0 (`totpm`), and YubiKey.
+- **Multi-Backend Architecture**: Seamlessly query or switch between 1Password, `pass-otp`, macOS Keychain (Apple Secure Enclave), Windows DPAPI & Credential Manager, FIDO2 CTAP 2.1 hardware keys, TPM 2.0 (`totpm`), and YubiKey.
+- **FIDO2 CTAP 2.1 Hardware Keys**: Hardware-bound TOTP encryption using CTAP2 `hmac-secret` and WebAuthn PRF extensions with interactive pulsing touch presence modal (`Fido2TouchModal`) and multi-token redundancy (`--backup-token`).
+- **Resident UNIX Socket Daemon & POSIX Shared Memory**: Background daemon maintaining decrypted tokens in page-locked RAM (`mlockall`), binary CBOR IPC with `SO_PEERCRED` caller verification, and a 64 KiB zero-copy shared memory ring buffer achieving sub-0.01ms code retrieval.
+- **Native Linux PAM Module**: Native C PAM module (`pam_otp_local.so`) for seamless two-factor authentication in `sudo`, SSH, and system authentication stacks without network dependencies.
+- **Cross-Platform Shell Modules**: PowerShell 7+ (`shell/otp-local.ps1`), NuShell (`shell/otp-local.nu`), and WSL2 UNIX-to-named-pipe IPC bridge (`src/authy_local/wsl_bridge.py`).
 - **Modern Textual TUI**: Interactive full-screen terminal interface with live visual countdown progress bars, profile switching, item detail inspector, and searchable token tables.
 - **Fail-Closed Security**: File modes enforced at 0600, parent directories at 0700, and zero sensitive state in process memory or error stack traces.
-- **Ephemeral Session Daemon**: Background systemd user service and socket activation (`authy-local-agent.service`) with configurable idle auto-lock (default: 900 seconds).
-- **Clipboard Scrubber**: High-reliability clipboard scrubber supporting Wayland (`wl-copy`), X11 (`xclip`), and macOS (`pbcopy`) with automatic 30-second memory wipes.
+- **Clipboard Scrubber**: High-reliability clipboard scrubber supporting Wayland (`wl-copy`), X11 (`xclip`), Windows (`clip`), and macOS (`pbcopy`) with automatic 30-second memory wipes.
 - **Terminal QR Rendering**: Inspect or cross-enroll tokens via high-contrast UTF-8/ANSI terminal QR codes directly inside the CLI or TUI (`otp-local qr <account>`).
-- **Comprehensive Doctor**: Non-authenticating diagnostic tool (`otp-local doctor`) evaluating platform tools, system clock synchronization, GPG agents, Secure Enclave, macOS Keychain, TPM devices, and IPC health. On Apple hardware, Linux-specific PC TPM 2.0 components are accurately detected and marked as `not-applicable`.
+- **Comprehensive Doctor**: Non-authenticating diagnostic tool (`otp-local doctor` and `otp-local doctor --pam`) evaluating platform tools, system clock synchronization, GPG agents, Secure Enclave, macOS Keychain, TPM devices, FIDO2 authenticators, and PAM subsystem health.
 - **Security Auditor**: Detect identical shared secrets, short seed lengths, or unhardened digest parameters (`otp-local audit`).
 - **Standardized Importers/Exporters**: Import or export tokens to standard formats (Aegis JSON, 2FAS, Bitwarden, Google Authenticator URI) with optional GPG recipient encryption.
 

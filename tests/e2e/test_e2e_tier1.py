@@ -15,6 +15,7 @@ import json
 import sys
 import unittest
 
+from authy_local import __version__
 from tests.e2e.harness import E2EEnvironment
 
 ITEM = "a" * 26
@@ -136,7 +137,7 @@ class TestTier1FeatureCoverage(unittest.TestCase):
         with E2EEnvironment() as env:
             result = env.invoke_cli(["--version"])
             self.assertEqual(result.exit_code, 0)
-            self.assertIn("1.1.0", result.stdout)
+            self.assertIn(__version__, result.stdout)
 
     # -------------------------------------------------------------------------
     # Feature 3: Copy Code
