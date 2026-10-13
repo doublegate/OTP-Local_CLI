@@ -127,10 +127,34 @@ and revokes it when the app locks. Local stores do not contact 1Password; GPG ma
 require pinentry and its own cache policy. Neither local mode promises permanent
 unlock or bypasses another tool's authentication policy.
 
+## macOS Keychain & Apple Secure Enclave design
+
+On Apple hardware running macOS (Darwin), discrete PC TPM 2.0 hardware is absent.
+Instead, hardware security protection is anchored to the **Apple Secure Enclave Processor (SEP)**
+present on Apple Silicon (M-series) Macs and Intel Macs equipped with the Apple T2 Security Chip.
+Credentials and TOTP seeds are protected via macOS Keychain Services using `/usr/bin/security`.
+
+Requirements for adoption:
+
+- macOS Darwin host operating system.
+- Access to the user's default login keychain.
+- Clean account labeling (1–64 ASCII alphanumeric characters, dots, dashes, or underscores).
+- Interactive password/seed submission using hidden standard input; secrets are never passed in command-line arguments or environment variables.
+
+Command contract:
+
+```text
+otp-local show --backend keychain --account ACCOUNT
+otp-local copy --backend keychain --account ACCOUNT
+otp-local select --backend keychain [--copy]
+otp-local enroll --backend keychain --account ACCOUNT --apply
+```
+
 ## Confirmed local deletion
 
 The [TUI](11-tui.md) supports removal of one selected local entry after typed
 confirmation. GPG removal unlinks the exact private ciphertext file. TPM removal
 uses an exact transaction against the pinned local database schema; native
-substring-matching deletion is not used. Keys, configuration and independent
-recovery copies remain intact. See [ADR 0007](adr/0007-confirmed-local-item-deletion.md).
+substring-matching deletion is not used. macOS Keychain removal deletes the exact
+matching generic password service item via `/usr/bin/security delete-generic-password`.
+Keys, configuration and independent recovery copies remain intact. See [ADR 0007](adr/0007-confirmed-local-item-deletion.md).

@@ -12,7 +12,7 @@ from authy_local import cli, tui, tui_profiles
 from authy_local.installer import InstallError, operate
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DIST_WHEEL = REPO_ROOT / "dist" / "authy_local-1.0.0-py3-none-any.whl"
+DIST_WHEEL = REPO_ROOT / "dist" / "authy_local-1.1.0-py3-none-any.whl"
 
 
 class MockCurses:
@@ -117,7 +117,7 @@ class E2EEnvironment:
         self.bin_dir.mkdir(parents=True, mode=0o700)
         self.clipboard_file = self.home / "clipboard.txt"
         self.calls_log = self.home / "mock_calls.jsonl"
-        self.wheel_path = self.home / "authy_local-1.0.0-py3-none-any.whl"
+        self.wheel_path = self.home / "authy_local-1.1.0-py3-none-any.whl"
 
         # Setup mock executables
         self._setup_mock_op()
@@ -219,8 +219,8 @@ class E2EEnvironment:
             import zipfile
             with zipfile.ZipFile(self.wheel_path, "w") as z:
                 z.writestr(
-                    "authy_local-1.0.0.dist-info/METADATA",
-                    "Metadata-Version: 2.1\nName: authy-local\nVersion: 1.0.0\n",
+                    "authy_local-1.1.0.dist-info/METADATA",
+                    "Metadata-Version: 2.1\nName: authy-local\nVersion: 1.1.0\n",
                 )
 
     def clipboard_content(self) -> str:

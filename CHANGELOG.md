@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-13
+
+### Added
+
+- Native macOS Keychain backend (`src/authy_local/backends/keychain.py`) utilizing `/usr/bin/security` to store, retrieve, enroll, and delete OTP tokens directly within the macOS Keychain.
+- Apple Secure Enclave hardware presence detection in system diagnostics (`otp-local doctor`), supporting Apple Silicon Secure Enclave Processor (SEP) via `arm64`/`aarch64` and Intel Macs with T2 Security Chip via `sysctl hw.model` and `system_profiler SPControllerDataType`.
+- Automated dependency remediation in `otp-local doctor` via `--install` and `--fix` CLI flags, automatically mapping missing capabilities (`fish`, `pass`, `oathtool`, `yubikey`, `fzf`, `qrencode`, `pinentry`) to Homebrew formulas on macOS.
+- `not-applicable` diagnostic status categorization for platform-specific hardware: marks Linux-specific PC TPM 2.0 components (`totpm`, `tpm2-totp`, `tpm-device`) as `not-applicable` rather than `missing` on macOS Darwin.
+- TUI `DoctorModal` support for `not-applicable` state with dedicated cyan badge styling (`— N/A`) and non-applicable count tracking in session status.
+- CLI `--backend keychain` support across `show`, `copy`, `select`, `enroll`, and `delete` subcommands with zero seed leakage in process arguments.
+- Textual TUI support for `keychain` backend across `BackendSelectModal` (numeric hotkey `6`), `AddOtpModal` (`chk-keychain`), `ScopeModal`, and token browsing.
+- Deletion audit logging support for `keychain` backend deletions with tamper-evident audit ledger entries in `deletion-audit.log`.
+
+### Fixed
+
+- Expand bounded subprocess sink capacity in `otp-local doctor --install` from 64 bytes to 10 MB (`stdout_cap` and `stderr_cap`) with a 900-second deadline, resolving Homebrew installation failure (`AppError: buffer capacity exceeded`) during formula pouring.
+- Exclude `not-applicable` capability lines in legacy curses TUI executor to maintain bounded single-page vertical display within standard 24-line terminal heights, preventing modal pagination traps.
+
+### Changed
+
+- Promoted package version to v1.1.0.
+- Updated documentation and README with macOS Keychain performance benchmarks (8.4 ms mean latency), architecture diagrams, and PEP 668 compliant `uv tool` installation workflows.
+
 ## [1.0.0] - 2026-10-13
 
 ### Added

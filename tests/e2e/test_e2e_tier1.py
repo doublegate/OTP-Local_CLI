@@ -136,7 +136,7 @@ class TestTier1FeatureCoverage(unittest.TestCase):
         with E2EEnvironment() as env:
             result = env.invoke_cli(["--version"])
             self.assertEqual(result.exit_code, 0)
-            self.assertIn("1.0.0", result.stdout)
+            self.assertIn("1.1.0", result.stdout)
 
     # -------------------------------------------------------------------------
     # Feature 3: Copy Code

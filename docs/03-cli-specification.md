@@ -22,7 +22,7 @@ or performs a TPM operation.
 ## Public commands
 
 ```text
-otp-local doctor [--json]
+otp-local doctor [--json] [--install|--fix]
 otp-local show ITEM_ID --account ACCOUNT_ID --vault VAULT_ID [--allow-pipe]
 otp-local tui
 otp-local --version
@@ -45,17 +45,19 @@ otp-local guide {optional,setup,acceptance,migration,recovery,tui}
 ```
 
 `show`, `copy`, `select`, `enroll`, `pick`, `import`, `export`, `audit`, and `qr` accept explicit
-`--backend onepassword|pass-otp|totpm|yubikey|tpm2-totp`; 1Password is the default.
+`--backend onepassword|pass-otp|totpm|yubikey|tpm2-totp|keychain`; 1Password is the default.
 `unlock` interactively authenticates or unlocks the 1Password session without command-line secret exposure.
 Local scope flags and hidden enrollment with explicit `--apply` are defined in
 [optional backends](08-optional-backends.md). Mixed scope flags fail closed. `guide` reads bundled
 public Markdown without a checkout or authentication. It does not update a private ledger or assert readiness.
 
 `doctor` and help/version never authenticate. Doctor returns presence, version and
-capability states `available`, `missing`, `unknown`; unknown clock/session checks
+capability states `available`, `missing`, `unknown`, `not-applicable`; unknown clock/session checks
 must remain unknown. `--json` is available only for this non-secret report.
-Current doctor probes Python/Linux support, the `op` version, optional tool
-presence and clock synchronization. Authentication always remains `unknown`.
+Current doctor probes Python/OS platform support (Linux, macOS Darwin), the `op` version, optional tool
+presence, Apple Secure Enclave & macOS Keychain, and clock synchronization. Authentication always remains `unknown`.
+On macOS Darwin, Linux PC TPM 2.0 components are categorized as `not-applicable`.
+`--install` or `--fix` automatically invokes Homebrew package management on macOS for missing capabilities.
 Missing optional tools and unknown clock do not alone fail it; unsupported core
 capabilities or an observed unsynchronized clock return 3.
 

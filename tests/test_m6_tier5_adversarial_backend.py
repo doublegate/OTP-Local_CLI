@@ -583,7 +583,7 @@ class TestInstallerAdversarial(unittest.TestCase):
             with self.assertRaises(InstallError):
                 installer._wheel(bad_name)
 
-            wheel_path = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
+            wheel_path = Path(tmp) / "authy_local-1.1.0-py3-none-any.whl"
             with zipfile.ZipFile(wheel_path, "w") as z:
                 z.writestr("../escape.txt", b"malicious")
             with self.assertRaises(InstallError):

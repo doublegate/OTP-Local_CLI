@@ -6,15 +6,16 @@ This file is the authority for project progress. Last reviewed: 2026-10-13
 ## Current state
 
 Phases 0–6 and the modern Textual TUI migration are complete. The software is
-formally released and installed as version 1.0.0. The package provides system
-diagnostics (`doctor`), scoped retrieval and clipboard handoff (`show`/`copy`/`select`),
-interactive 1Password session `unlock`, desktop quick-picking (`pick`), bulk
-`import` and `export`, credential `audit`, terminal `qr` rendering, and an ephemeral
-`agent` daemon with systemd socket activation. `otp-local tui` provides a modern
-Textual dashboard supporting five credential backends (1Password, pass-otp/GPG,
-totpm/TPM 2.0, YubiKey OATH, and hardware TPM 2.0).
+formally released and installed as version 1.1.0. The package provides system
+diagnostics (`doctor` with automated `--install`/`--fix` Homebrew capability remediation),
+scoped retrieval and clipboard handoff (`show`/`copy`/`select`), interactive 1Password session
+`unlock`, desktop quick-picking (`pick`), bulk `import` and `export`, credential `audit`,
+terminal `qr` rendering, an ephemeral `agent` daemon with systemd socket activation, and
+Apple Secure Enclave & macOS Keychain backend integration. `otp-local tui` provides a modern
+Textual dashboard supporting six credential backends (1Password, pass-otp/GPG,
+totpm/TPM 2.0, YubiKey OATH, hardware TPM 2.0, and macOS Keychain).
 
-Automated validation uses synthetic data across 699 unit, integration, and E2E
+Automated validation uses synthetic data across 718 unit, integration, and E2E
 regression tests with a 100% pass rate. The operator approved the exact home
 installation and verified live operations. Checkpoint A disposable acceptance
 and Checkpoint B pilot-001 passed on operator attestation.
@@ -22,14 +23,14 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | Area | State | Evidence |
 |---|---|---|
 | Agent guidance | Configured | Inline Master-Claude core 0.2.0; canonical AGENTS.md with sibling symlinks |
-| Entry point and plan | Final release 1.0.0 delivered; gates verified | Seven phases; fifteen sprints; 52 completed tasks |
+| Entry point and plan | Final release 1.1.0 delivered; gates verified | Seven phases; fifteen sprints; 52 completed tasks |
 | Migration reference | Preserved; derived baseline researched | Immutable v2 runbook, clarification, docs/00-index.md |
-| CLI/TUI and fish | Released v1.0.0 installed and verified | Five backends, hidden local enrollment, Textual dashboard, guides, wrappers |
+| CLI/TUI and fish | Released v1.1.0 installed and verified | Six backends, hidden local enrollment, Textual dashboard, guides, wrappers |
 | Reversible installation | Operator-approved and applied | docs/2026-10-12-installation-preview.md; ownership, repeat preview and help/version pass |
 | Host prerequisites | Read-only snapshot verified | docs/2026-10-12-phase-0-readiness.md |
 | Human 1Password readiness | Operator-attested pass | Desktop unlock and scoped CLI approval; Checkpoint A disposable acceptance passed |
 | Account migration | Pilot migrated, operator-attested | pilot-001: total 1, migrated 1, blocked 0, pending 0; full inventory unknown |
-| Automated tests/lint/build | All quality gates pass | 699 tests; 100% pass rate; ruff clean, markdownlint clean |
+| Automated tests/lint/build | All quality gates pass | 718 tests; 100% pass rate; ruff clean, markdownlint clean |
 | Version control | Standalone local main; no remote | Host-level Git verification; no remote push requested |
 
 ## Milestones
@@ -40,6 +41,7 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | T-AUTH-002: operational preflight plan | Complete | Accepted decisions, refreshed host evidence and operator readiness attestation |
 | T-AUTH-003: one-account pilot | Complete | Checkpoint B operator attestation; pilot account verified |
 | T-AUTH-004: v1.0.0 final release | Complete | All phases, backends, Textual TUI, CLI subcommands, and quality gates pass |
+| T-AUTH-005: v1.1.0 macOS & Secure Enclave release | Complete | Apple Secure Enclave & Keychain backend, Homebrew doctor remediation, and Darwin support |
 
 ## Phase and capability matrix
 
@@ -50,10 +52,10 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | 2 UX and rollout | Complete | Selector, clipboard, fish, reversible installer and curses TUI gates pass |
 | 3 Migration | Awaiting operator checkpoints | Checkpoints A/B passed; private ledger confirmation and reconciled batches pending |
 | 4 Optional extensions | Complete | Software implemented and verified; GPG and TPM hardware backends active |
-| 5 Completion | Complete | Software gates pass; v1.0.0 installed and verified |
+| 5 Completion | Complete | Software gates pass; v1.1.0 installed and verified |
 | 6 Interactive enrollment | Complete | Sprints 6.1 and 6.2 complete; secret string, QR decoding, 1Password tagged "OTP", and Textual TUI AddOtpModal pass test gates |
 
-Package version is 1.0.0.
+Package version is 1.1.0.
 
 ## Metrics and timeline
 
@@ -61,7 +63,7 @@ Package version is 1.0.0.
 |---|---|---|
 | Derived specification | Fourteen numbered guides and eight ADRs | docs/00-index.md |
 | Delivery plan | Seven phases; fifteen sprints; 52 completed tasks | to-dos/README.md and sprint files |
-| Software/test/release | Final release 1.0.0 / 699 tests pass / 100% pass rate | tests/ |
+| Software/test/release | Final release 1.1.0 / 718 tests pass / 100% pass rate | tests/ |
 | Coverage | 94% aggregate; validator/1Password adapter 100% | Branch-inclusive coverage report; blocking floors 90% / 100% |
 | Account outcomes | Pilot: 1 migrated / 0 blocked / 0 pending; full inventory unknown | Checkpoint B operator attestation; no private inventory read |
 | Documentation validation | Authored files; links, task IDs and lint pass; reference hash unchanged | docs/00-index.md |

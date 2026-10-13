@@ -15,8 +15,15 @@ node_modules/
 
 # OS and editor files
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
 *.swp
 *~
+*.bak
+.uv/
 
 # Operator data never belongs in this repository
 .env

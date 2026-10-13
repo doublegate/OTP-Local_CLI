@@ -365,7 +365,7 @@ class TestTier2BoundaryAndCornerCases(unittest.TestCase):
     def test_f6_boundary_corrupt_zip_file(self):
         """Corrupt/non-zip wheel file is rejected with status 3."""
         with E2EEnvironment() as env:
-            bad_wheel = env.home / "authy_local-1.0.0-py3-none-any.whl"
+            bad_wheel = env.home / "authy_local-1.1.0-py3-none-any.whl"
             bad_wheel.write_bytes(b"NOT_A_VALID_ZIP_ARCHIVE")
             keys = [ord("8"), *map(ord, str(bad_wheel)), 10, 10, ord("q")]
             code, screen = env.run_tui(keys)
@@ -385,7 +385,7 @@ class TestTier2BoundaryAndCornerCases(unittest.TestCase):
     def test_f6_boundary_path_escaping_home_rejected(self):
         """Wheel path attempting path traversal escapes is rejected."""
         with E2EEnvironment() as env:
-            bad_path = "/etc/authy_local-1.0.0-py3-none-any.whl"
+            bad_path = "/etc/authy_local-1.1.0-py3-none-any.whl"
             keys = [ord("8"), *map(ord, bad_path), 10, 10, ord("q")]
             code, screen = env.run_tui(keys)
             self.assertEqual(code, 0)

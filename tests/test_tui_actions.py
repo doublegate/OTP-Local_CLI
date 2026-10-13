@@ -220,7 +220,7 @@ class TestTuiActions(unittest.IsolatedAsyncioTestCase):
 
             # Enter wheel path
             inp = preview_modal.query_one("#preview-wheel-input", Input)
-            inp.value = "dist/authy_local-1.0.0-py3-none-any.whl"
+            inp.value = "dist/authy_local-1.1.0-py3-none-any.whl"
             await pilot.press("enter")
             await pilot.pause()
 

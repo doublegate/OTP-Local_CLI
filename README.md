@@ -1,6 +1,6 @@
 # OTP-Local CLI
 
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v1.0.0)
+[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v1.1.0)
 [![Python](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](README.md#cross-platform-installation)
@@ -134,40 +134,42 @@ Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all ex
 
 ## Cross-Platform Installation
 
-`OTP-Local CLI` requires Python 3.14. For modern operating systems enforcing externally managed Python environments ([PEP 668](https://peps.python.org/pep-0668/)), installation via [`pipx`](https://pipx.pypa.io/) or [`uv tool`](https://docs.astral.sh/uv/) is strongly recommended to isolate CLI dependencies without modifying system Python.
+`OTP-Local CLI` requires Python 3.14. For modern operating systems enforcing externally managed Python environments ([PEP 668](https://peps.python.org/pep-0668/)), installation via [`uv tool`](https://docs.astral.sh/uv/) or [`pipx`](https://pipx.pypa.io/) is strongly recommended to isolate CLI dependencies without modifying system Python.
 
-### macOS (Homebrew + pipx)
+### macOS (uv / Homebrew + pipx)
 
 ```sh
-# 1. Install prerequisites and pipx via Homebrew
+# Option A: Using uv (fastest, standalone tool installation)
+uv tool install --editable .
+
+# Option B: Using Homebrew and pipx
 brew install qrencode fzf 1password-cli pipx
 pipx ensurepath
-
-# 2. Install from local repository clone
 pipx install .
 
 # Or install directly from GitHub without cloning:
-# pipx install git+https://github.com/doublegate/OTP-Local_CLI.git
+# uv tool install git+https://github.com/doublegate/OTP-Local_CLI.git
 
-# 3. Verify installation and run diagnostics
-otp-local doctor
+# Verify installation and automatically remediate missing capabilities:
+otp-local doctor --install
 ```
 
 ### Linux (Arch Linux, Fedora, Ubuntu, Debian)
 
 ```sh
-# 1. Install prerequisites and pipx
+# Option A: Using uv
+uv tool install --editable .
+
+# Option B: Using distribution package manager and pipx
 sudo apt-get install -y qrencode fzf wl-clipboard pipx  # Debian/Ubuntu
 # sudo pacman -S qrencode fzf wl-clipboard python-pipx   # Arch Linux
 pipx ensurepath
-
-# 2. Install from local repository clone
 pipx install .
 
 # Or install directly from GitHub without cloning:
-# pipx install git+https://github.com/doublegate/OTP-Local_CLI.git
+# uv tool install git+https://github.com/doublegate/OTP-Local_CLI.git
 
-# 3. Verify installation and run diagnostics
+# Verify installation and run diagnostics
 otp-local doctor
 ```
 
@@ -176,8 +178,9 @@ otp-local doctor
 Under Windows, running within WSL2 is recommended for full POSIX keyrings and hardware integrations. In native PowerShell with Python 3.14:
 
 ```powershell
-# Install via pipx in isolated CLI environment
-pipx install .
+# Install via uv or pipx in isolated CLI environment
+uv tool install --editable .
+# pipx install .
 
 # Run diagnostics
 otp-local doctor
@@ -203,7 +206,9 @@ pip install .
 <summary><strong>Pre-Built Release Wheel</strong></summary>
 
 ```sh
-pipx install https://github.com/doublegate/OTP-Local_CLI/releases/download/v1.0.0/authy_local-1.0.0-py3-none-any.whl
+pipx install https://github.com/doublegate/OTP-Local_CLI/releases/download/v1.1.0/authy_local-1.1.0-py3-none-any.whl
+# or with uv:
+# uv tool install https://github.com/doublegate/OTP-Local_CLI/releases/download/v1.1.0/authy_local-1.1.0-py3-none-any.whl
 ```
 
 </details>
