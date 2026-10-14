@@ -2,7 +2,10 @@
 
 import base64
 import binascii
+import errno
 import json
+import os
+import stat
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
@@ -305,40 +308,71 @@ def detect_and_parse_import(
         return parse_google_authenticator_migration(source.strip())
 
     path = Path(source).expanduser()
-    if path.is_file():
-        if path.is_symlink():
-            raise AppError(3)
-        try:
-            size = path.stat().st_size
-            if size > _MAX_IMPORT_FILE_SIZE:
-                raise AppError(2)
-            content_bytes = path.read_bytes()
-        except OSError:
+    if path.is_symlink():
+        raise AppError(3)
+
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except FileNotFoundError:
+        raise AppError(2) from None
+    except OSError as err:
+        if err.errno == errno.ELOOP:
             raise AppError(3) from None
+        if err.errno in (errno.ENAMETOOLONG, errno.EINVAL, errno.ENOENT):
+            raise AppError(2) from None
+        raise AppError(3) from None
 
-        text = content_bytes.decode("utf-8", errors="replace").strip()
-        if fmt == "uri-list":
-            return parse_uri_list(text)
-        if fmt == "google-migration" or text.startswith("otpauth-migration://"):
-            return parse_google_authenticator_migration(text)
-
-        # Try JSON formats
-        if text.startswith("{") or fmt in ("aegis", "bitwarden"):
-            try:
-                data = json.loads(text)
-                if isinstance(data, dict):
-                    if fmt == "bitwarden" or "items" in data:
-                        return parse_bitwarden_json(data)
-                    if fmt == "aegis" or "db" in data or "entries" in data or "header" in data:
-                        return parse_aegis_json(data)
-            except Exception:
-                if fmt in ("aegis", "bitwarden"):
-                    raise AppError(2) from None
-
-        # Try line-by-line otpauth:// / steam:// URIs
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > _MAX_IMPORT_FILE_SIZE:
+            os.close(fd)
+            raise AppError(2)
+        chunks = []
+        bytes_read = 0
+        while True:
+            chunk = os.read(fd, 65536)
+            if not chunk:
+                break
+            bytes_read += len(chunk)
+            if bytes_read > _MAX_IMPORT_FILE_SIZE:
+                os.close(fd)
+                raise AppError(2)
+            chunks.append(chunk)
+        os.close(fd)
+        content_bytes = b"".join(chunks)
+    except AppError:
+        raise
+    except OSError:
         try:
-            return parse_uri_list(text)
-        except AppError:
+            os.close(fd)
+        except OSError:
             pass
+        raise AppError(3) from None
+
+    text = content_bytes.decode("utf-8", errors="replace").strip()
+    if fmt == "uri-list":
+        return parse_uri_list(text)
+    if fmt == "google-migration" or text.startswith("otpauth-migration://"):
+        return parse_google_authenticator_migration(text)
+
+    # Try JSON formats
+    if text.startswith("{") or fmt in ("aegis", "bitwarden"):
+        try:
+            data = json.loads(text)
+            if isinstance(data, dict):
+                if fmt == "bitwarden" or "items" in data:
+                    return parse_bitwarden_json(data)
+                if fmt == "aegis" or "db" in data or "entries" in data or "header" in data:
+                    return parse_aegis_json(data)
+        except Exception:
+            if fmt in ("aegis", "bitwarden"):
+                raise AppError(2) from None
+
+    # Try line-by-line otpauth:// / steam:// URIs
+    try:
+        return parse_uri_list(text)
+    except AppError:
+        pass
 
     raise AppError(2)

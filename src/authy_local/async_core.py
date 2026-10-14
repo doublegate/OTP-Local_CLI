@@ -319,12 +319,23 @@ class AsyncFederatedResolver:
             except Exception:
                 return None
 
-        tasks = [_get(b) for b in self.backends]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for r in results:
-            if isinstance(r, TotpResult) and r.code:
-                return r
-        return None
+        tasks = [asyncio.create_task(_get(b)) for b in self.backends]
+        try:
+            for fut in asyncio.as_completed(tasks):
+                try:
+                    res = await fut
+                    if isinstance(res, TotpResult) and res.code:
+                        for t in tasks:
+                            if not t.done():
+                                t.cancel()
+                        return res
+                except Exception:
+                    pass
+            return None
+        finally:
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
 
 
 # --- Asynchronous Framing and JSON-RPC 2.0 Streaming Protocol ---

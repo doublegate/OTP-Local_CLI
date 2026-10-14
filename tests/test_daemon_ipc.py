@@ -15,7 +15,11 @@ from unittest.mock import patch
 from authy_local.cli import main
 from authy_local.daemon import (
     DaemonServer,
+    daemon_clean,
+    daemon_restart,
+    daemon_start,
     daemon_status,
+    daemon_stop,
     daemon_systemd_install,
     generate_systemd_unit,
     lock_process_memory,
@@ -349,6 +353,228 @@ class TestDaemonIpc(unittest.TestCase):
                 server._running = False
                 server_thread.join(timeout=2.0)
                 server.cleanup()
+
+    def test_daemon_concurrent_client_handling(self) -> None:
+        """Verify slow client holding connection does not block concurrent fast clients."""
+        server = DaemonServer(
+            sock_path=self.test_sock,
+            shm_name=self.test_shm_name,
+            pid_file=self.test_pid,
+            env=self.env,
+        )
+        server_thread = threading.Thread(target=server.start, daemon=True)
+        server_thread.start()
+
+        for _ in range(50):
+            if self.test_sock.exists():
+                break
+            time.sleep(0.05)
+
+        try:
+            # 1. Connect a slow client that sleeps before sending request
+            slow_sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            slow_sock.connect(str(self.test_sock))
+
+            # 2. Concurrently execute fast client request
+            t0 = time.perf_counter()
+            fast_resp = send_ipc_request({"action": "ping"}, sock_path=self.test_sock, timeout=1.0)
+            elapsed_fast = time.perf_counter() - t0
+
+            self.assertIsNotNone(fast_resp)
+            self.assertEqual(fast_resp.get("status"), "ok")
+            # Fast response must complete well under 200ms despite slow client holding open socket
+            self.assertLess(
+                elapsed_fast,
+                0.2,
+                f"Fast client took {elapsed_fast:.3f}s; head-of-line blocking detected",
+            )
+
+            # Clean up slow socket
+            slow_sock.close()
+        finally:
+            server._running = False
+            server_thread.join(timeout=2.0)
+            server.cleanup()
+
+    def test_daemon_burst_connection_drain(self) -> None:
+        """Verify burst of 20 concurrent connections are all drained and handled without loss."""
+        server = DaemonServer(
+            sock_path=self.test_sock,
+            shm_name=self.test_shm_name,
+            pid_file=self.test_pid,
+            env=self.env,
+        )
+        server_thread = threading.Thread(target=server.start, daemon=True)
+        server_thread.start()
+
+        for _ in range(50):
+            if self.test_sock.exists():
+                break
+            time.sleep(0.05)
+
+        try:
+            burst_size = 20
+
+            def query(i):
+                return send_ipc_request(
+                    {"action": "ping", "seq": i}, sock_path=self.test_sock, timeout=2.0
+                )
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=burst_size) as ex:
+                futures = [ex.submit(query, i) for i in range(burst_size)]
+                responses = [f.result() for f in futures]
+
+            self.assertEqual(len(responses), burst_size)
+            for resp in responses:
+                self.assertIsNotNone(resp)
+                self.assertEqual(resp.get("status"), "ok")
+        finally:
+            server._running = False
+            server_thread.join(timeout=2.0)
+            server.cleanup()
+
+    @patch("authy_local.daemon.DaemonServer.start", return_value=None)
+    def test_daemon_start_stale_pid_auto_cleanup(self, mock_server_start) -> None:
+        p_path = pid_path(self.env)
+        s_path = socket_path(self.env)
+        p_path.parent.mkdir(parents=True, exist_ok=True)
+        p_path.write_text("99999999\n", encoding="ascii")
+        s_path.touch()
+
+        ret = daemon_start(foreground=True, env=self.env)
+        self.assertEqual(ret, 0)
+        self.assertFalse(p_path.exists())
+        self.assertFalse(s_path.exists())
+        mock_server_start.assert_called_once()
+
+    @patch("authy_local.daemon.DaemonServer.start", return_value=None)
+    def test_daemon_start_corrupted_pid_auto_cleanup(self, mock_server_start) -> None:
+        p_path = pid_path(self.env)
+        s_path = socket_path(self.env)
+        p_path.parent.mkdir(parents=True, exist_ok=True)
+        p_path.write_text("not-a-number\n", encoding="ascii")
+        s_path.touch()
+
+        ret = daemon_start(foreground=True, env=self.env)
+        self.assertEqual(ret, 0)
+        self.assertFalse(p_path.exists())
+        self.assertFalse(s_path.exists())
+        mock_server_start.assert_called_once()
+
+    @patch("authy_local.daemon.DaemonServer.start", return_value=None)
+    def test_daemon_start_non_positive_pid_auto_cleanup(self, mock_server_start) -> None:
+        """Verify daemon_start treats 0 and negative PIDs as invalid without signalling process group."""
+        for raw in ("0\n", "-1\n"):
+            p_path = pid_path(self.env)
+            s_path = socket_path(self.env)
+            p_path.parent.mkdir(parents=True, exist_ok=True)
+            p_path.write_text(raw, encoding="ascii")
+            s_path.touch()
+
+            with patch("os.kill") as mock_kill:
+                ret = daemon_start(foreground=True, env=self.env)
+                self.assertEqual(ret, 0)
+                self.assertFalse(p_path.exists())
+                self.assertFalse(s_path.exists())
+                mock_kill.assert_not_called()
+
+    @patch("authy_local.daemon.send_ipc_request")
+    def test_daemon_start_active_process_aborts(self, mock_ping) -> None:
+        p_path = pid_path(self.env)
+        p_path.parent.mkdir(parents=True, exist_ok=True)
+        p_path.write_text(f"{os.getpid()}\n", encoding="ascii")
+        mock_ping.return_value = {"status": "ok"}
+
+        ret = daemon_start(foreground=False, env=self.env)
+        self.assertEqual(ret, 0)
+        self.assertTrue(p_path.exists())
+
+    def test_daemon_stop_stale_pid(self) -> None:
+        p_path = pid_path(self.env)
+        s_path = socket_path(self.env)
+        p_path.parent.mkdir(parents=True, exist_ok=True)
+        p_path.write_text("99999999\n", encoding="ascii")
+        s_path.touch()
+
+        ret = daemon_stop(env=self.env)
+        self.assertEqual(ret, 0)
+        self.assertFalse(p_path.exists())
+        self.assertFalse(s_path.exists())
+
+    def test_daemon_stop_non_positive_pid(self) -> None:
+        """Verify daemon_stop cleans up 0 and negative PIDs without calling os.kill."""
+        for raw in ("0\n", "-1\n"):
+            p_path = pid_path(self.env)
+            s_path = socket_path(self.env)
+            p_path.parent.mkdir(parents=True, exist_ok=True)
+            p_path.write_text(raw, encoding="ascii")
+            s_path.touch()
+
+            with patch("os.kill") as mock_kill:
+                ret = daemon_stop(env=self.env)
+                self.assertEqual(ret, 0)
+                self.assertFalse(p_path.exists())
+                self.assertFalse(s_path.exists())
+                mock_kill.assert_not_called()
+
+    def test_daemon_clean_stale_artifacts(self) -> None:
+        p_path = pid_path(self.env)
+        s_path = socket_path(self.env)
+        p_path.parent.mkdir(parents=True, exist_ok=True)
+        p_path.write_text("99999999\n", encoding="ascii")
+        s_path.touch()
+
+        ret = daemon_clean(env=self.env)
+        self.assertEqual(ret, 0)
+        self.assertFalse(p_path.exists())
+        self.assertFalse(s_path.exists())
+
+    def test_daemon_clean_non_positive_pid(self) -> None:
+        """Verify daemon_clean cleans up 0 and negative PIDs without calling os.kill."""
+        for raw in ("0\n", "-1\n"):
+            p_path = pid_path(self.env)
+            s_path = socket_path(self.env)
+            p_path.parent.mkdir(parents=True, exist_ok=True)
+            p_path.write_text(raw, encoding="ascii")
+            s_path.touch()
+
+            with patch("os.kill") as mock_kill:
+                ret = daemon_clean(env=self.env)
+                self.assertEqual(ret, 0)
+                self.assertFalse(p_path.exists())
+                self.assertFalse(s_path.exists())
+                mock_kill.assert_not_called()
+
+    @patch("authy_local.daemon.send_ipc_request")
+    def test_daemon_clean_active_daemon_preserves(self, mock_ping) -> None:
+        p_path = pid_path(self.env)
+        s_path = socket_path(self.env)
+        p_path.parent.mkdir(parents=True, exist_ok=True)
+        p_path.write_text(f"{os.getpid()}\n", encoding="ascii")
+        s_path.touch()
+        mock_ping.return_value = {"status": "ok"}
+
+        ret = daemon_clean(env=self.env)
+        self.assertEqual(ret, 1)
+        self.assertTrue(p_path.exists())
+
+    @patch("authy_local.daemon.daemon_start")
+    @patch("authy_local.daemon.daemon_stop")
+    def test_daemon_restart_lifecycle(self, mock_stop, mock_start) -> None:
+        p_path = pid_path(self.env)
+        p_path.parent.mkdir(parents=True, exist_ok=True)
+        p_path.write_text("12345\n", encoding="ascii")
+        mock_stop.return_value = 0
+        mock_start.return_value = 0
+
+        ret = daemon_restart(foreground=False, env=self.env)
+        self.assertEqual(ret, 0)
+        mock_stop.assert_called_once_with(env=self.env)
+        mock_start.assert_called_once_with(foreground=False, env=self.env)
+
+    def test_systemd_unit_fallback_path(self) -> None:
+        unit = generate_systemd_unit()
+        self.assertIn("ReadWritePaths=%t %h/.local/state/authy-local", unit)
 
 
 if __name__ == "__main__":

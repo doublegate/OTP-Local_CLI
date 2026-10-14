@@ -1,11 +1,11 @@
 # CLI and adapter contract
 
-The package implements `doctor`, `show`, `copy`, `select`, `enroll`, `guide`, help and version.
-The cohesive curses interface is specified in [TUI](11-tui.md). Operational
+The package implements `doctor`, `show`, `copy`, `select`, `list`, `search`, `enroll`, `unlock`, `pick`, `import`, `export`, `audit`, `qr`, `daemon`, `agent`, `guide`, help and version.
+The cohesive Textual interface (with `_curses_compat` legacy support) is specified in [TUI](11-tui.md). Operational
 installation and live acceptance are tracked separately in project status.
 
 The TUI can save operator-configured backend scope in its private resident
-profiles and browse scoped metadata with curses. This does not change CLI
+profiles and browse scoped metadata with Textual. This does not change CLI
 `show`, `copy` or `select`: their scope flags remain explicit and TUI profiles
 are never implicit CLI defaults. See [resident scope and browsing](11-tui.md).
 The TUI also supports explicitly confirmed deletion of a single selected local
@@ -22,7 +22,7 @@ or performs a TPM operation.
 ## Public commands
 
 ```text
-otp-local doctor [--json] [--install|--fix]
+otp-local doctor [--json] [--pam] [--install|--fix]
 otp-local show ITEM_ID --account ACCOUNT_ID --vault VAULT_ID [--allow-pipe]
 otp-local tui
 otp-local --version
@@ -33,19 +33,25 @@ Additional commands:
 ```text
 otp-local copy ITEM_ID --account ACCOUNT_ID --vault VAULT_ID
 otp-local select --account ACCOUNT_ID --vault VAULT_ID [--copy]
+otp-local list [--backend ...] [--json]
+otp-local search QUERY [--backend ...] [--code] [--copy] [--json]
 otp-local unlock [--account ACCOUNT]
-otp-local enroll [--apply] [--title ...] [--digits ...] [--period ...]
+otp-local enroll [--apply] [--title ...] [--digits ...] [--period ...] [--fido2] [--backup-token ...]
 otp-local pick [--launcher auto|wofi|rofi|fzf] [--no-notify] [--stdout]
 otp-local import SOURCE [--format auto|aegis|bitwarden|google-migration|uri-list] [--dry-run] [--apply]
 otp-local export [--format uri|aegis|csv] [--output PATH] [--encrypt-gpg KEY_ID]
-otp-local audit [--json]
+otp-local audit [--rotate] [--json]
 otp-local qr ITEM_ID [--allow-pipe]
+otp-local daemon {start,stop,restart,status,clean,reload} [--timeout SECONDS]
 otp-local agent {status,start,stop,lock} [--timeout SECONDS]
 otp-local guide {optional,setup,acceptance,migration,recovery,tui}
 ```
 
-`show`, `copy`, `select`, `enroll`, `pick`, `import`, `export`, `audit`, and `qr` accept explicit
-`--backend onepassword|pass-otp|totpm|yubikey|tpm2-totp|keychain`; 1Password is the default.
+Legacy root flag aliases (`--daemon`, `--status`, `--stop`, `--clean`, `--doctor`, `--pick`) are
+normalized to their canonical subcommands for backward compatibility.
+
+`show`, `copy`, `select`, `list`, `search`, `enroll`, `pick`, `import`, `export`, `audit`, and `qr` accept explicit
+`--backend onepassword|bitwarden|keepass|federated|pass-otp|totpm|yubikey|tpm2-totp|keychain|dpapi|fido2`; 1Password is the default.
 `unlock` interactively authenticates or unlocks the 1Password session without command-line secret exposure.
 Local scope flags and hidden enrollment with explicit `--apply` are defined in
 [optional backends](08-optional-backends.md). Mixed scope flags fail closed. `guide` reads bundled
@@ -54,10 +60,12 @@ public Markdown without a checkout or authentication. It does not update a priva
 `doctor` and help/version never authenticate. Doctor returns presence, version and
 capability states `available`, `missing`, `unknown`, `not-applicable`; unknown clock/session checks
 must remain unknown. `--json` is available only for this non-secret report.
-Current doctor probes Python/OS platform support (Linux, macOS Darwin), the `op` version, optional tool
-presence, Apple Secure Enclave & macOS Keychain, and clock synchronization. Authentication always remains `unknown`.
+Current doctor probes Python/OS platform support (Linux, macOS Darwin, Windows), the `op` and `bw` versions, optional tool
+presence, Apple Secure Enclave & macOS Keychain, Windows DPAPI, FIDO2 authenticators, memory security (`mlock`/`MADV_DONTDUMP`),
+PAM subsystem configuration (`--pam`), and clock synchronization. Authentication always remains `unknown`.
 On macOS Darwin, Linux PC TPM 2.0 components are categorized as `not-applicable`.
-`--install` or `--fix` automatically invokes Homebrew package management on macOS for missing capabilities.
+`--install` or `--fix` automatically invokes Homebrew on macOS, `apt-get`/`pacman`/`dnf` on Linux (with root/sudo privilege detection),
+and `winget`/`scoop` on Windows for missing capabilities.
 Missing optional tools and unknown clock do not alone fail it; unsupported core
 capabilities or an observed unsynchronized clock return 3.
 

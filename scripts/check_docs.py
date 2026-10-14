@@ -27,8 +27,9 @@ def main():
         {f"T-AUTH-{i:03}" for i in range(10, 62)}
         | {f"T-AUTH-{i:03}" for i in range(70, 78)}
         | {f"T-AUTH-{i:03}" for i in range(80, 128)}
+        | {f"T-AUTH-{i:03}" for p in range(13, 23) for i in range(p * 10, p * 10 + 8)}
     )
-    if len(tasks) != 108 or set(tasks) != expected_tasks:
+    if len(tasks) != 188 or set(tasks) != expected_tasks:
         failures.append("Sprint task allocation changed or contains duplicate IDs")
     if hashlib.sha256(REF.read_bytes()).hexdigest() != EXPECTED:
         failures.append("Immutable reference hash changed")

@@ -1,6 +1,5 @@
 """FIDO2 CTAP 2.1 hardware security key backend with HMAC-secret derivation."""
 
-import ctypes
 import hashlib
 import hmac
 import json
@@ -12,6 +11,7 @@ from typing import Any, Callable
 
 from ..enrollment import OtpParameters, generate_totp_code
 from ..errors import AppError
+from ..security import secure_zero
 
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
 SALT_PREFIX = b"OTP-Local-Salt-v1"
@@ -110,6 +110,7 @@ def get_ctap2_device() -> tuple[Any, Any]:
     if not devices:
         raise AppError(3)
 
+    usable_candidates: list[tuple[Any, Any]] = []
     for dev in devices:
         try:
             if hasattr(dev, "ctap"):
@@ -121,15 +122,21 @@ def get_ctap2_device() -> tuple[Any, Any]:
                 info = ctap.get_info()
 
             extensions = getattr(info, "extensions", []) or []
-            if "hmac-secret" in extensions or getattr(dev, "has_hmac_secret", True):
+            has_hmac = (
+                ("hmac-secret" in extensions)
+                if isinstance(extensions, (list, tuple, set))
+                else False
+            ) or getattr(dev, "has_hmac_secret", False) is True
+            if has_hmac:
                 return dev, ctap
+            usable_candidates.append((dev, ctap))
         except Exception:
             continue
 
-    # Fallback to first device if extension negotiation is flexible
-    first = devices[0]
-    ctap = getattr(first, "ctap", None) or Ctap2(first)
-    return first, ctap
+    if usable_candidates:
+        return usable_candidates[0]
+
+    raise AppError(3)
 
 
 def probe(env: dict[str, str]) -> dict[str, Any]:
@@ -137,25 +144,39 @@ def probe(env: dict[str, str]) -> dict[str, Any]:
     if not HAS_FIDO2 or not HAS_CRYPTOGRAPHY:
         return {"state": "missing", "reason": "fido2 or cryptography library missing"}
 
-    devices = list_devices()
+    try:
+        devices = list_devices()
+    except Exception:
+        return {"state": "missing", "device_count": 0}
+
     if not devices:
         return {"state": "missing", "device_count": 0}
 
     usable = False
+    valid_devices = 0
     for dev in devices:
         try:
             ctap = getattr(dev, "ctap", None) or Ctap2(dev)
             info = getattr(ctap, "info", None)
+            if info is None and hasattr(ctap, "get_info"):
+                info = ctap.get_info()
             extensions = getattr(info, "extensions", []) or []
-            if "hmac-secret" in extensions or getattr(dev, "has_hmac_secret", True):
+            has_hmac = (
+                ("hmac-secret" in extensions)
+                if isinstance(extensions, (list, tuple, set))
+                else False
+            ) or getattr(dev, "has_hmac_secret", False) is True
+            if has_hmac:
                 usable = True
+                valid_devices += 1
                 break
+            valid_devices += 1
         except Exception:
-            pass
+            continue
 
     return {
         "state": "available" if usable else "missing",
-        "device_count": len(devices),
+        "device_count": valid_devices,
         "hmac_secret": usable,
     }
 
@@ -368,7 +389,12 @@ def fido2_code(
     for b in entry.get("backup_tokens", []):
         candidates.append(b)
 
-    dev, ctap = get_ctap2_device()
+    try:
+        dev, ctap = get_ctap2_device()
+    except AppError:
+        raise
+    except Exception as exc:
+        raise AppError(3) from exc
 
     if touch_callback:
         touch_callback()
@@ -404,22 +430,24 @@ def fido2_code(
 
             kdk = _derive_kdk(hmac_output)
             aes = AESGCM(kdk)
-            plaintext_bytes = aes.decrypt(nonce, ciphertext, account.encode("utf-8"))
-            raw_secret = plaintext_bytes.decode("utf-8", errors="replace").strip()
+            decrypted = aes.decrypt(nonce, ciphertext, account.encode("utf-8"))
+            plaintext_buf = bytearray(decrypted)
+            raw_secret = plaintext_buf.decode("utf-8", errors="replace").strip()
             try:
                 params = OtpParameters(secret=raw_secret, account=account)
                 code, _ = generate_totp_code(params, timestamp=timestamp)
                 return code
             finally:
                 raw_secret = ""
-                c_buf = (ctypes.c_char * len(plaintext_bytes)).from_buffer(
-                    bytearray(plaintext_bytes)
-                )
-                ctypes.memset(ctypes.addressof(c_buf), 0, len(plaintext_bytes))
+                secure_zero(plaintext_buf)
         except AppError as exc:
             last_error = exc
             continue
-        except Exception:
+        except (OSError, IOError) as exc:
+            raise AppError(3) from exc
+        except Exception as exc:
+            if "disconnect" in str(exc).lower() or "device" in str(exc).lower():
+                raise AppError(3) from exc
             continue
 
     if last_error:

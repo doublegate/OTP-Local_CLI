@@ -344,6 +344,47 @@ class InstallerTests(unittest.TestCase):
             with self.assertRaises(InstallError):
                 operate("install", home, wheel=real, environment={})
 
+    def test_wheel_v2_dependencies_accepted(self):
+        from authy_local.installer import _wheel
+
+        with tempfile.TemporaryDirectory(
+            prefix="installer-", dir="/tmp/Authy-to-1Password_Local"
+        ) as tmp:
+            artifact = Path(tmp) / "authy_local-2.0.0-py3-none-any.whl"
+            metadata = (
+                "Metadata-Version: 2.4\n"
+                "Name: authy-local\n"
+                "Version: 2.0.0\n"
+                "Requires-Python: >=3.14,<3.15\n"
+                "Requires-Dist: textual>=0.80.0\n"
+                "Requires-Dist: fido2>=2.0.0\n"
+                "Requires-Dist: pluggy>=1.0.0\n"
+            )
+            with zipfile.ZipFile(artifact, "w") as archive:
+                archive.writestr("authy_local/__init__.py", "__version__ = '2.0.0'\n")
+                archive.writestr("authy_local-2.0.0.dist-info/METADATA", metadata)
+            path, digest = _wheel(artifact)
+            self.assertEqual(path, artifact)
+            self.assertEqual(len(digest), 64)
+
+    def test_onepassword_enroll_fallback_malformed_json(self):
+        from unittest.mock import MagicMock, patch
+
+        from authy_local.backends import onepassword
+
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = b"invalid json"
+        with patch(
+            "authy_local.backends.onepassword.probe",
+            return_value={"state": "available", "path": "/usr/bin/op"},
+        ):
+            with patch("authy_local.backends.onepassword.run", return_value=mock_result):
+                res = onepassword.enroll(
+                    "a" * 26, "a" * 26, "title", "otpauth://totp/x", {"PATH": "/bin"}
+                )
+                self.assertEqual(res, "title")
+
     def test_concurrent_target_edit_is_preserved_during_activation(self):
         from authy_local import installer
 

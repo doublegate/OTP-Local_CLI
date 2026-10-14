@@ -123,11 +123,12 @@ class TestBitwardenBackend(unittest.TestCase):
         mgr = BitwardenSessionManager()
         session_token = "GENERATED_SESSION_TOKEN_1234567890"
 
-        def fake_run(cmd, stdin=None, **kwargs):
+        def fake_run(cmd, input_data=None, stdin=None, **kwargs):
             self.assertIn("unlock", cmd)
             self.assertIn("--raw", cmd)
-            # Master password must be passed on stdin, never on commandline
-            self.assertEqual(stdin, b"MyMasterPassword123!")
+            # Master password must be passed on stdin/input_data, never on commandline
+            data = input_data if input_data is not None else stdin
+            self.assertEqual(data, b"MyMasterPassword123!")
             return Completed(0, session_token.encode("utf-8"))
 
         mock_run.side_effect = fake_run
@@ -276,10 +277,12 @@ class TestBitwardenBackend(unittest.TestCase):
     @patch("shutil.which", return_value="/usr/bin/bw")
     @patch("authy_local.backends.bitwarden.run")
     def test_bitwarden_enroll_success(self, mock_run, mock_which):
-        def fake_run(cmd, stdin=None, **kwargs):
+        def fake_run(cmd, input_data=None, stdin=None, **kwargs):
             self.assertIn("create", cmd)
             self.assertIn("item", cmd)
-            payload = json.loads(stdin.decode("utf-8"))
+            data = input_data if input_data is not None else stdin
+            assert data is not None
+            payload = json.loads(data.decode("utf-8"))
             self.assertEqual(payload["name"], "GitLab")
             self.assertEqual(payload["login"]["totp"], "JBSWY3DPEHPK3PXP")
             return Completed(0, json.dumps({"id": "created-id-456"}).encode("utf-8"))
@@ -373,6 +376,50 @@ class TestBitwardenBackend(unittest.TestCase):
             )
             self.assertEqual(code, 0)
             mock_enroll.assert_called_once_with("NewService", "JBSWY3DPEHPK3PXP", unittest.mock.ANY)
+
+    @patch("shutil.which", return_value="/usr/bin/bw")
+    @patch("authy_local.backends.bitwarden.run")
+    def test_bitwarden_large_vault_buffer_overflow_prevention(self, mock_run, mock_which):
+        large_items = [
+            {
+                "id": f"item-{i}",
+                "name": f"Enterprise Account {i}",
+                "login": {"username": f"user{i}@example.com", "totp": "JBSWY3DPEHPK3PXP"},
+                "notes": "x" * 800,
+            }
+            for i in range(1500)
+        ]
+        raw_json = json.dumps(large_items).encode("utf-8")
+        self.assertGreater(len(raw_json), 1024 * 1024)
+
+        def check_run(cmd, stdout_cap=0, **kwargs):
+            self.assertGreaterEqual(stdout_cap, 2 * 1024 * 1024)
+            return Completed(0, raw_json)
+
+        mock_run.side_effect = check_run
+        items = bitwarden.list_items(self.env)
+        self.assertEqual(len(items), 1500)
+
+    def test_bitwarden_alias_bw_list_items(self):
+        self.assertIs(bitwarden._bw_list_items, bitwarden.list_items)
+
+    @patch("shutil.which", return_value="/usr/bin/bw")
+    @patch("authy_local.backends.bitwarden.run")
+    def test_bitwarden_unlock_uses_input_data_keyword(self, mock_run, mock_which):
+        mock_run.return_value = Completed(0, b"session-token-xyz")
+        mgr = BitwardenSessionManager()
+        mgr.unlock("MasterPass!", self.env)
+        self.assertIn("input_data", mock_run.call_args[1])
+        self.assertNotIn("stdin", mock_run.call_args[1])
+        self.assertEqual(mock_run.call_args[1]["input_data"], b"MasterPass!")
+
+    @patch("shutil.which", return_value="/usr/bin/bw")
+    @patch("authy_local.backends.bitwarden.run")
+    def test_bitwarden_enroll_uses_input_data_keyword(self, mock_run, mock_which):
+        mock_run.return_value = Completed(0, json.dumps({"id": "item-999"}).encode("utf-8"))
+        bitwarden.bitwarden_enroll("ServiceX", "JBSWY3DPEHPK3PXP", self.env)
+        self.assertIn("input_data", mock_run.call_args[1])
+        self.assertNotIn("stdin", mock_run.call_args[1])
 
 
 if __name__ == "__main__":

@@ -15,6 +15,42 @@ from authy_local import cli, processes
 from authy_local.errors import AppError
 
 
+def proc_stat_state(pid: int) -> str:
+    """Namespace-aware and host-proc-safe process state probe.
+
+    Distinguishes an owned child from recycled/host kernel threads.
+    """
+    if pid <= 0:
+        return "gone"
+
+    try:
+        wpid, _ = os.waitpid(pid, os.WNOHANG)
+        if wpid == pid:
+            return "Z"
+    except ChildProcessError:
+        pass
+
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError, PermissionError:
+        return "gone"
+
+    proc_dir = Path(f"/proc/{pid}")
+    stat_file = proc_dir / "stat"
+    if stat_file.is_file():
+        try:
+            st = proc_dir.stat()
+            cmdline = (proc_dir / "cmdline").read_bytes()
+            if st.st_uid == os.getuid() and cmdline:
+                stat_content = stat_file.read_text()
+                return stat_content.rsplit(")", 1)[1].split()[0]
+            return "gone"
+        except FileNotFoundError, ProcessLookupError, PermissionError:
+            return "gone"
+
+    return "S" if sys.platform != "linux" else "gone"
+
+
 class RegressionTests(unittest.TestCase):
     def setUp(self):
         root = Path("/tmp/Authy-to-1Password_Local")
@@ -82,11 +118,7 @@ class RegressionTests(unittest.TestCase):
             pid = int(pidfile.read_text())
             state = "unknown"
             for _ in range(50):
-                try:
-                    state = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0]
-                except FileNotFoundError:
-                    state = "gone"
-                    break
+                state = proc_stat_state(pid)
                 if state in ("gone", "Z"):
                     break
                 time.sleep(0.01)

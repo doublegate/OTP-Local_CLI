@@ -10,7 +10,7 @@ See [PROJECT-STATUS.md](../PROJECT-STATUS.md) for current implementation verific
 
 ```text
 docs/
-├── specs/       Core architectural, system, security, and interface specifications (01–19)
+├── specs/       Core architectural, system, security, and interface specifications (01–23)
 ├── adr/         Architectural Decision Records (ADRs 0001–0014)
 ├── operations/  Operator checkpoints, runbook clarifications, and setup procedures
 ├── reports/     Verification, validation, and empirical testing reports
@@ -30,6 +30,7 @@ docs/
 | [04: Security & Data](specs/04-security-and-data.md) | Threat model, memory lifecycle, private ledger storage, and credential isolation |
 | [05: Development & Testing](specs/05-development-and-testing.md) | Toolchain, synthetic test fixtures, quality gates, and TDD workflow |
 | [06: Instantiation](specs/06-installation-and-instantiation.md) | Host preparation, pipx / uv tool install, upgrade, and reversible uninstall |
+| [06b: Security Architecture](specs/06-security-architecture.md) | Defense-in-depth runtime memory/filesystem isolation and audit waivers |
 | [07: Migration & Recovery](specs/07-migration-and-recovery.md) | Human account migration batches, emergency recovery, and reconciliation |
 | [08: Optional Backends](specs/08-optional-backends.md) | Hardware TPM (`totpm`) and GPG (`pass-otp`) stores, skip criteria, and fallbacks |
 | [09: Operations & Completion](specs/09-operations-and-completion.md) | Maintenance, incident response, operational closure, and final acceptance |
@@ -43,6 +44,10 @@ docs/
 | [17: Vault Federation](specs/17-vault-federation.md) | Bitwarden CLI (`bw`), direct KeePassXC `.kdbx4` engine, and unified search |
 | [18: Security Auditor v2](specs/18-security-auditor-v2.md) | Memory locking (`mlock`), `MADV_DONTDUMP`, entropy analysis, and secret rotation |
 | [19: v2 Architecture](specs/19-v2-architecture.md) | Universal async core (`asyncio`), pluggy plugin engine, and public API freeze |
+| [20: Secret Service & Biometrics](specs/20-secret-service-and-biometrics.md) | D-Bus Secret Service provider and platform biometrics (Touch ID, Windows Hello) |
+| [21: Specialized OTP Protocols](specs/21-specialized-otp-protocols.md) | Steam Guard, Blizzard, Yandex, and RFC 4226 HOTP counter synchronization |
+| [22: Encrypted Backup & Sync](specs/22-encrypted-backup-and-sync.md) | Sovereign Age container format and decentralized WebDAV / S3 sync transports |
+| [23: Passkeys & WebAuthn](specs/23-passkey-and-webauthn-bridge.md) | Sovereign identity, FIDO2 passkey software engine, and WebAuthn assertion bridge |
 
 ---
 

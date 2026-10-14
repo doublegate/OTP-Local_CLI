@@ -1,6 +1,6 @@
 # Delivery roadmap
 
-Status: Formally released at v1.5.0. Phases 0–10 complete; all quality gates verified.
+Status: Formally released at v2.0.1 LTS. Phases 0–12 complete; Phases 13–22 scaffolded through v3.0.0 LTS; all quality gates verified.
 Progress belongs in [PROJECT-STATUS.md](PROJECT-STATUS.md); task checkboxes close only when
 their evidence exists. [Requirements](docs/specs/01-requirements.md) map acceptance to
 sprints. [Plan index](to-dos/README.md) links the complete phase/sprint documents.
@@ -43,6 +43,26 @@ They are milestones, not reused implementation task IDs.
 | [11.2](to-dos/sprints/11.2.md) | Autonomous security auditor v2, entropy analysis, and rotation engine | T-AUTH-116–119 | 11.1 |
 | [12.1](to-dos/sprints/12.1.md) | Universal async engine and fast streaming JSON-RPC / CBOR protocol | T-AUTH-120–123 | Phase 0–11 |
 | [12.2](to-dos/sprints/12.2.md) | Extensible plugin hook architecture and v2.0.0 LTS public API freeze | T-AUTH-124–127 | 12.1 |
+| [13.1](to-dos/sprints/13.1.md) | Freedesktop Secret Service D-Bus provider and session negotiation | T-AUTH-130–133 | Phase 0–12 |
+| [13.2](to-dos/sprints/13.2.md) | Platform biometric authorization (Touch ID, Windows Hello, fprintd) | T-AUTH-134–137 | 13.1 |
+| [14.1](to-dos/sprints/14.1.md) | Specialized algorithmic engines (Steam Guard, Blizzard, Yandex) | T-AUTH-140–143 | Phase 0–13 |
+| [14.2](to-dos/sprints/14.2.md) | RFC 4226 HOTP counter-based engine and desync recovery | T-AUTH-144–147 | 14.1 |
+| [15.1](to-dos/sprints/15.1.md) | Sovereign encrypted vault container (Age / Argon2id) | T-AUTH-150–153 | Phase 0–14 |
+| [15.2](to-dos/sprints/15.2.md) | Decentralized sync transports (WebDAV, S3, conflict resolution) | T-AUTH-154–157 | 15.1 |
+| [16.1](to-dos/sprints/16.1.md) | Mobile authenticator ingestion (Aegis, 2FAS, Ente, Google Protobuf) | T-AUTH-160–163 | Phase 0–15 |
+| [16.2](to-dos/sprints/16.2.md) | Password manager interoperability (1Password, Bitwarden, KeePassXC) | T-AUTH-164–167 | 16.1 |
+| [17.1](to-dos/sprints/17.1.md) | Linux status bar streaming modules (Waybar, Polybar) | T-AUTH-170–173 | Phase 0–16 |
+| [17.2](to-dos/sprints/17.2.md) | Quick-launchers and fuzzy pickers (Raycast, Alfred, Rofi, Wofi) | T-AUTH-174–177 | 17.1 |
+| [18.1](to-dos/sprints/18.1.md) | HashiCorp Vault integration (TOTP engine and Transit decryption) | T-AUTH-180–183 | Phase 0–17 |
+| [18.2](to-dos/sprints/18.2.md) | Cloud provider secrets engines (AWS, GCP, Azure Key Vault) | T-AUTH-184–187 | 18.1 |
+| [19.1](to-dos/sprints/19.1.md) | Hardware key credential lifecycle and touch-policy enforcement | T-AUTH-190–193 | Phase 0–18 |
+| [19.2](to-dos/sprints/19.2.md) | Multi-vendor key support and virtual CTAP2 test loopback | T-AUTH-194–197 | 19.1 |
+| [20.1](to-dos/sprints/20.1.md) | Native Rust cryptographic engine (PyO3, SIMD HMAC, constant-time Base32) | T-AUTH-200–203 | Phase 0–19 |
+| [20.2](to-dos/sprints/20.2.md) | High-throughput zero-copy IPC ring buffer and fallback verification | T-AUTH-204–207 | 20.1 |
+| [21.1](to-dos/sprints/21.1.md) | Modern UI dashboard (vault folders, tags, circular timers, audit replay) | T-AUTH-210–213 | Phase 0–20 |
+| [21.2](to-dos/sprints/21.2.md) | Optical webcam QR scanner, batch actions, and bulk modals | T-AUTH-214–217 | 21.1 |
+| [22.1](to-dos/sprints/22.1.md) | FIDO2 Passkey software authenticator (resident keys, assertions) | T-AUTH-220–223 | Phase 0–21 |
+| [22.2](to-dos/sprints/22.2.md) | WebAuthn assertion bridge, v3.0.0 LTS API freeze, and release | T-AUTH-224–227 | 22.1 |
 
 No fixed calendar dates are imposed: human recovery and enrollment gates control
 the schedule. Phase 4 can be explicitly skipped; its absence does not block the
@@ -62,6 +82,16 @@ baseline. Account exceptions can prevent full retirement while software is compl
 - Phase 10 ends with Bitwarden and KeePassXC multi-vault federation release (v1.5.0).
 - Phase 11 ends with memory forensics hardening and security auditor v2 release (v1.6.0).
 - Phase 12 ends with universal async core, plugin engine, and public API freeze (v2.0.0).
+- Phase 13 ends with D-Bus Secret Service and platform biometrics release (v2.1.0).
+- Phase 14 ends with specialized OTP algorithms and HOTP counter sync release (v2.2.0).
+- Phase 15 ends with zero-knowledge Age encrypted vault and WebDAV / S3 sync release (v2.3.0).
+- Phase 16 ends with universal authenticator ecosystem import / export release (v2.4.0).
+- Phase 17 ends with desktop status bar and application launcher integration release (v2.5.0).
+- Phase 18 ends with HashiCorp Vault and cloud provider secrets federation release (v2.6.0).
+- Phase 19 ends with hardware security key lifecycle and virtual CTAP2 release (v2.7.0).
+- Phase 20 ends with native Rust cryptographic acceleration and zero-copy IPC release (v2.8.0).
+- Phase 21 ends with next-generation Textual TUI 2.0 and optical QR scanning release (v2.9.0).
+- Phase 22 ends with sovereign identity, FIDO2 passkey engine, and WebAuthn assertion bridge (v3.0.0).
 
 Sprint completion requires its deliverables, passing applicable gates and a sanitized
 report. Do not check tasks merely because a plan exists. At a failed gate, preserve

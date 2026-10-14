@@ -157,6 +157,61 @@ class BenchmarkAndSearchTests(unittest.TestCase):
         self.assertIn("Benchmark Target / Hot-Path", table)
         self.assertIn("Subprocess Probe Check", table)
 
+    def test_ipc_streaming_benchmark_sla(self):
+        from benchmarks import benchmark_ipc as bm_ipc
+
+        res = bm_ipc.run_benchmark(iterations=200)
+        self.assertIn("roundtrip_ms", res)
+        self.assertIn("streaming_throughput_ops_sec", res)
+        self.assertTrue(res["sla_met"])
+        self.assertLess(
+            res["roundtrip_ms"],
+            1.0,
+            f"IPC round-trip {res['roundtrip_ms']:.3f}ms exceeded 1.0ms SLA",
+        )
+        self.assertGreater(res["speedup"], 10.0)
+
+    def test_shm_ring_buffer_benchmark_sla(self):
+        from benchmarks import benchmark_shm as bm_shm
+
+        res = bm_shm.run_benchmark(read_iterations=5_000, write_iterations=500)
+        self.assertIn("read_slot_us", res)
+        self.assertIn("corruptions", res)
+        self.assertTrue(res["sla_met"])
+        self.assertEqual(
+            res["corruptions"], 0, "Seqlock corruption detected under concurrent stress"
+        )
+        self.assertLess(
+            res["read_slot_us"],
+            10.0,
+            f"SHM read latency {res['read_slot_us']:.2f}us exceeded 10us threshold",
+        )
+
+    def test_tui_event_processing_benchmark_sla(self):
+        from benchmarks import benchmark_tui as bm_tui
+
+        res = bm_tui.run_benchmark(catalog_size=500, iterations=10)
+        self.assertIn("optimized_populate_ms", res)
+        self.assertIn("cached_empty_reset_ms", res)
+        self.assertTrue(res["sla_met"])
+        self.assertLess(
+            res["optimized_populate_ms"], 5.0, "OptionList populate exceeded 5.0ms ceiling"
+        )
+        self.assertLess(
+            res["cached_empty_reset_ms"], 0.1, "Cached empty reset exceeded 0.1ms ceiling"
+        )
+
+    def test_federation_concurrent_benchmark_sla(self):
+        from benchmarks import benchmark_federation as bm_fed
+
+        res = bm_fed.run_benchmark(backend_count=4, per_backend_latency_ms=15.0)
+        self.assertIn("speedup", res)
+        self.assertIn("concurrent_ms", res)
+        self.assertTrue(res["sla_met"])
+        self.assertGreaterEqual(
+            res["speedup"], 2.5, f"Expected >= 2.5x speedup, got {res['speedup']:.2f}x"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

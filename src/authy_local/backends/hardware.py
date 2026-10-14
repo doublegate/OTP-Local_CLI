@@ -1,10 +1,13 @@
 """Hardware token backends: YubiKey (ykman OATH) and TPM 2.0 (tpm2-totp)."""
 
+import re
 import shutil
 
 from ..errors import AppError
 from ..models import parse_code
 from ..processes import run
+
+LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}\Z")
 
 
 def probe_hardware(env: dict[str, str]) -> dict[str, dict[str, str]]:
@@ -44,6 +47,8 @@ def yubikey_records(env: dict[str, str]) -> list[tuple[str, str]]:
 
 def yubikey_code(name: str, env: dict[str, str]) -> str:
     """Generate TOTP code from connected YubiKey for specified account name."""
+    if not name or not LABEL.fullmatch(name):
+        raise AppError(2)
     ykman = shutil.which("ykman", path=env.get("PATH", ""))
     if not ykman:
         raise AppError(3)

@@ -132,6 +132,15 @@ def probe(env: dict[str, str], *, use_cache: bool = True) -> dict[str, Any]:
     }
 
 
+def _is_otp_field(key: str) -> bool:
+    k = key.lower().strip()
+    return (
+        k in ("otp", "totp", "totp seed", "totp_seed", "keepassxc-totp", "timeotp-secret-base32")
+        or "totp" in k
+        or (k.startswith("otp") and "settings" not in k)
+    )
+
+
 def _parse_xml_entries(xml_data: str | bytes) -> list[dict[str, Any]]:
     """Parse decrypted KeePass XML database to extract entries with OTP strings."""
     entries: list[dict[str, Any]] = []
@@ -144,11 +153,14 @@ def _parse_xml_entries(xml_data: str | bytes) -> list[dict[str, Any]]:
                 val_el = str_el.find("Value")
                 if key_el is not None and key_el.text and val_el is not None:
                     entry_dict[key_el.text] = val_el.text or ""
-            # Must have title and otp field
+
             title = entry_dict.get("Title") or ""
-            otp = (
-                entry_dict.get("otp") or entry_dict.get("TOTP") or entry_dict.get("TOTP Seed") or ""
-            )
+            otp = ""
+            for k, v in entry_dict.items():
+                if _is_otp_field(k) and v and v.strip():
+                    otp = v.strip()
+                    break
+
             if title and otp:
                 entries.append(
                     {
@@ -169,22 +181,53 @@ def keepass_records(env: dict[str, str], db_path: Path | None = None) -> list[tu
 
     if cli_path and target_db.is_file():
         clean_env = child_environment(env)
-        cmd = [cli_path, "ls", "-R", str(target_db)]
         keyfile = session_manager.get_keyfile()
-        if keyfile:
-            cmd.extend(["-k", keyfile])
-
         password = session_manager.get_password()
         stdin_data = (password + "\n").encode("utf-8") if password else None
 
-        res = run(cmd, env=clean_env, timeout=10, stdin=stdin_data, stdout_cap=1048576)
+        # 1. Attempt fast XML export to filter non-TOTP entries precisely
+        export_cmd = [cli_path, "export", str(target_db)]
+        if keyfile:
+            export_cmd.extend(["-k", keyfile])
+        try:
+            exp_res = run(
+                export_cmd,
+                env=clean_env,
+                timeout=10,
+                input_data=stdin_data,
+                stdout_cap=2097152,
+            )
+            if (
+                exp_res.returncode == 0
+                and exp_res.stdout
+                and (b"<KeePassFile" in exp_res.stdout or b"<Entry" in exp_res.stdout)
+            ):
+                entries = _parse_xml_entries(exp_res.stdout)
+                records = []
+                for e in entries:
+                    title = e["title"]
+                    user = e.get("username")
+                    label = f"{title} ({user})" if user else title
+                    records.append((title, f"{label} [KeePassXC]"))
+                return sorted(records, key=lambda r: r[1].lower())
+        except Exception:
+            pass
+
+        # 2. Fallback to ls -R
+        cmd = [cli_path, "ls", "-R", str(target_db)]
+        if keyfile:
+            cmd.extend(["-k", keyfile])
+
+        res = run(cmd, env=clean_env, timeout=10, input_data=stdin_data, stdout_cap=2097152)
         if res.returncode == 0 and res.stdout:
             lines = res.stdout.decode("utf-8", errors="replace").splitlines()
             records = []
             for line in lines:
-                name = line.strip().strip("/")
-                if name:
-                    records.append((name, f"{name} [KeePassXC]"))
+                stripped = line.strip()
+                if not stripped or stripped.endswith("/"):
+                    continue
+                name = stripped.strip("/")
+                records.append((name, f"{name} [KeePassXC]"))
             return sorted(records, key=lambda r: r[1].lower())
 
     # Fallback to direct mock / in-memory parsed database if configured
@@ -202,6 +245,9 @@ def keepass_records(env: dict[str, str], db_path: Path | None = None) -> list[tu
     if not target_db.is_file() and not cli_path:
         raise AppError(3)
     return []
+
+
+list_records = keepass_records
 
 
 def keepass_code(
@@ -232,7 +278,7 @@ def keepass_code(
         password = session_manager.get_password()
         stdin_data = (password + "\n").encode("utf-8") if password else None
 
-        res = run(cmd, env=clean_env, timeout=10, stdin=stdin_data, stdout_cap=2048)
+        res = run(cmd, env=clean_env, timeout=10, input_data=stdin_data, stdout_cap=2048)
         if res.returncode == 0 and res.stdout:
             try:
                 code = parse_code(res.stdout.strip())
@@ -288,7 +334,7 @@ def keepass_enroll(
         # Provide master password + blank entry password
         stdin_data = f"{password}\n\n".encode("utf-8")
 
-        res = run(cmd, env=clean_env, timeout=10, stdin=stdin_data, stdout_cap=2048)
+        res = run(cmd, env=clean_env, timeout=10, input_data=stdin_data, stdout_cap=2048)
         if res.returncode != 0:
             raise AppError(4)
         return
@@ -325,7 +371,7 @@ def keepass_delete(
         password = session_manager.get_password()
         stdin_data = (password + "\n").encode("utf-8") if password else None
 
-        res = run(cmd, env=clean_env, timeout=10, stdin=stdin_data, stdout_cap=2048)
+        res = run(cmd, env=clean_env, timeout=10, input_data=stdin_data, stdout_cap=2048)
         if res.returncode != 0:
             raise AppError(4)
         return

@@ -1,11 +1,12 @@
 """Resident UNIX domain socket authentication daemon with locked RAM and SHM ring buffer."""
 
-import ctypes
+import concurrent.futures
 import os
 import select
 import signal
 import socket
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -18,23 +19,26 @@ from .ipc import (
     socket_path,
     verify_peer_credentials,
 )
+from .security import (
+    SecureBuffer,
+    init_runtime_security,
+    lock_process_memory,
+    secure_zero,
+)
 from .shm import ShmRingBuffer, get_default_shm_name
 
-MCL_CURRENT = 1
-MCL_FUTURE = 2
-
-
-def lock_process_memory() -> bool:
-    """Lock entire virtual memory address space into physical RAM to prevent swapping."""
-    if sys.platform.startswith("linux") or sys.platform == "darwin":
-        try:
-            libc = ctypes.CDLL(None)
-            if hasattr(libc, "mlockall"):
-                res = libc.mlockall(MCL_CURRENT | MCL_FUTURE)
-                return res == 0
-        except Exception:
-            pass
-    return False
+__all__ = [
+    "DaemonServer",
+    "daemon_clean",
+    "daemon_reload",
+    "daemon_restart",
+    "daemon_start",
+    "daemon_status",
+    "daemon_stop",
+    "daemon_systemd_install",
+    "generate_systemd_unit",
+    "lock_process_memory",
+]
 
 
 def generate_systemd_unit(exec_path: str | None = None) -> str:
@@ -52,7 +56,7 @@ Restart=on-failure
 RestartSec=3s
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%t
+ReadWritePaths=%t %h/.local/state/authy-local
 LimitMEMLOCK=infinity
 
 [Install]
@@ -78,22 +82,32 @@ class DaemonServer:
         self.idle_timeout = idle_timeout
 
         self._cached_tokens: dict[str, OtpParameters] = {}
+        self._cached_buffers: dict[str, SecureBuffer] = {}
         self._server_sock: socket.socket | None = None
         self._shm: ShmRingBuffer | None = None
         self._running = False
         self._start_time = 0.0
         self._last_active = 0.0
+        self._max_workers = 16
+        self._executor: concurrent.futures.ThreadPoolExecutor | None = None
+        self._cache_lock = threading.Lock()
 
     def start(self) -> None:
         """Bind socket, initialize shared memory, lock RAM, and enter event loop."""
         self._start_time = time.time()
         self._last_active = self._start_time
 
-        # 1. Lock memory
-        lock_process_memory()
+        # 1. Initialize process security and lock memory
+        init_runtime_security(enable_mlock=True)
 
         # 2. Initialize Shared Memory Ring Buffer
         self._shm = ShmRingBuffer(name=self.shm_name, create=True)
+
+        # 2b. Initialize ThreadPoolExecutor for concurrent client handling
+        self._executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=self._max_workers,
+            thread_name_prefix="daemon-ipc-worker",
+        )
 
         # 3. Bind UNIX domain socket
         if self.sock_path.exists():
@@ -160,16 +174,30 @@ class DaemonServer:
                 break
 
             if rlist:
-                try:
-                    conn, _ = self._server_sock.accept()
-                    self._handle_client(conn)
-                except OSError, ValueError:
-                    pass
+                while self._running:
+                    try:
+                        conn, _ = self._server_sock.accept()
+                    except BlockingIOError, InterruptedError:
+                        break
+                    except OSError, ValueError:
+                        break
+
+                    if self._executor is not None:
+                        try:
+                            self._executor.submit(self._handle_client, conn)
+                        except RuntimeError:
+                            try:
+                                conn.close()
+                            except OSError:
+                                pass
+                    else:
+                        self._handle_client(conn)
 
         self.cleanup()
 
     def _handle_client(self, conn: socket.socket) -> None:
         """Process incoming client connection, verify peer credentials, and dispatch request."""
+        req_format = "cbor"
         try:
             conn.settimeout(2.0)
             # Verify caller UID
@@ -186,10 +214,12 @@ class DaemonServer:
             if action == "ping":
                 resp = {"status": "ok", "version": 1}
             elif action == "status":
+                with self._cache_lock:
+                    cached_count = len(self._cached_tokens)
                 resp = {
                     "status": "ok",
                     "pid": os.getpid(),
-                    "cached_count": len(self._cached_tokens),
+                    "cached_count": cached_count,
                     "uptime": time.time() - self._start_time,
                     "shm_name": self.shm_name,
                 }
@@ -200,7 +230,9 @@ class DaemonServer:
             elif action == "verify_totp":
                 resp = self._action_verify_totp(req)
             elif action == "list_tokens":
-                resp = {"status": "ok", "accounts": sorted(self._cached_tokens.keys())}
+                with self._cache_lock:
+                    accounts = sorted(self._cached_tokens.keys())
+                resp = {"status": "ok", "accounts": accounts}
             elif action == "flush_cache":
                 self.flush_cache()
                 resp = {"status": "ok", "flushed": True}
@@ -239,7 +271,15 @@ class DaemonServer:
             period=req.get("period", 30),
             algorithm=req.get("algorithm", "SHA1"),
         )
-        self._cached_tokens[account] = params
+        sec_bytes = params.secret.encode("utf-8")
+        sbuf = SecureBuffer(size=max(len(sec_bytes), 64))
+        sbuf.write(sec_bytes)
+
+        with self._cache_lock:
+            if account in self._cached_buffers:
+                self._cached_buffers[account].close()
+            self._cached_buffers[account] = sbuf
+            self._cached_tokens[account] = params
 
         # Immediately update SHM slot
         code, rem = generate_totp_code(params)
@@ -261,7 +301,8 @@ class DaemonServer:
         if not account:
             return {"status": "error", "message": "Account identifier required"}
 
-        params = self._cached_tokens.get(account)
+        with self._cache_lock:
+            params = self._cached_tokens.get(account)
         if not params:
             return {"status": "not_found", "message": f"Token for '{account}' not cached"}
 
@@ -294,7 +335,8 @@ class DaemonServer:
         if not account or not submitted_code:
             return {"status": "error", "message": "Account and code required"}
 
-        params = self._cached_tokens.get(account)
+        with self._cache_lock:
+            params = self._cached_tokens.get(account)
         if not params:
             return {"status": "not_found", "message": f"Token for '{account}' not cached"}
 
@@ -315,7 +357,9 @@ class DaemonServer:
         """Iterate all cached tokens and refresh active codes in SHM."""
         if not self._shm:
             return
-        for acct, params in self._cached_tokens.items():
+        with self._cache_lock:
+            items = list(self._cached_tokens.items())
+        for acct, params in items:
             try:
                 code, rem = generate_totp_code(params, timestamp=now)
                 self._shm.write_slot(
@@ -331,21 +375,44 @@ class DaemonServer:
 
     def flush_cache(self) -> None:
         """Cryptographically zero memory and clear all cached tokens."""
-        for acct in list(self._cached_tokens.keys()):
-            params = self._cached_tokens[acct]
-            # Zero secret buffer
-            sec_len = len(params.secret)
-            c_buf = (ctypes.c_char * sec_len).from_buffer(bytearray(params.secret.encode("utf-8")))
-            ctypes.memset(ctypes.addressof(c_buf), 0, sec_len)
-        self._cached_tokens.clear()
+        with self._cache_lock:
+            # 1. Zero and close all active SecureBuffers
+            for sbuf in self._cached_buffers.values():
+                try:
+                    sbuf.close()
+                except Exception:
+                    pass
+            self._cached_buffers.clear()
 
-        # Re-initialize shared memory buffer
+            # 2. Clear token secret references and dictionary
+            for acct in list(self._cached_tokens.keys()):
+                params = self._cached_tokens[acct]
+                params.secret = ""
+            self._cached_tokens.clear()
+
+        # 3. Securely zero shared memory ring buffer slots and re-init header
         if self._shm:
-            self._shm._init_header()
+            try:
+                buf = getattr(self._shm, "buf", None)
+                if buf is not None and not getattr(buf, "released", False):
+                    secure_zero(buf)
+            except ValueError, BufferError, AttributeError, Exception:
+                pass
+            try:
+                self._shm._init_header()
+            except ValueError, BufferError, AttributeError, Exception:
+                pass
 
     def cleanup(self) -> None:
         """Clean up process resources, unlinking socket, PID file, and SHM segment."""
         self.flush_cache()
+
+        if self._executor is not None:
+            try:
+                self._executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:
+                pass
+            self._executor = None
 
         if self._server_sock is not None:
             try:
@@ -372,21 +439,54 @@ class DaemonServer:
 
 
 def daemon_start(foreground: bool = False, env: dict[str, str] | None = None) -> int:
-    """Start the resident background daemon or run in foreground."""
+    """Start the resident background daemon or run in foreground with stale PID recovery."""
     s_path = socket_path(env)
     p_path = pid_path(env)
 
-    # Check if already running
+    # Robust stale PID & socket detection
     if p_path.exists():
+        is_stale = False
+        pid = None
         try:
-            pid = int(p_path.read_text(encoding="ascii").strip())
-            os.kill(pid, 0)
-            ping_resp = send_ipc_request({"action": "ping"}, sock_path=s_path, timeout=1.0)
-            if ping_resp and ping_resp.get("status") == "ok":
-                sys.stdout.write(f"OTP-Local daemon is already running (PID {pid}).\n")
-                return 0
-        except OSError, ValueError:
-            pass
+            raw_pid = p_path.read_text(encoding="ascii").strip()
+            pid = int(raw_pid)
+            if pid <= 0:
+                raise ValueError("Invalid non-positive PID")
+            try:
+                os.kill(pid, 0)
+                # Process is active
+                ping_resp = send_ipc_request({"action": "ping"}, sock_path=s_path, timeout=1.0)
+                if ping_resp and ping_resp.get("status") == "ok":
+                    sys.stdout.write(f"OTP-Local daemon is already running (PID {pid}).\n")
+                    return 0
+                else:
+                    sys.stderr.write(
+                        f"Warning: Process {pid} is active but daemon socket is unresponsive.\n"
+                    )
+                    return 1
+            except ProcessLookupError:
+                # Dead process
+                is_stale = True
+            except PermissionError:
+                sys.stderr.write(f"Warning: Daemon PID {pid} is running under another user.\n")
+                return 1
+        except ValueError, OSError:
+            is_stale = True
+
+        if is_stale:
+            stale_desc = f"process {pid}" if pid and pid > 0 else "corrupted PID"
+            sys.stderr.write(
+                f"Warning: Cleaning up stale PID file ({stale_desc} is not running).\n"
+            )
+            try:
+                p_path.unlink()
+            except OSError:
+                pass
+            if s_path.exists():
+                try:
+                    s_path.unlink()
+                except OSError:
+                    pass
 
     if foreground:
         server = DaemonServer(sock_path=s_path, pid_file=p_path, env=env)
@@ -418,48 +518,155 @@ def daemon_start(foreground: bool = False, env: dict[str, str] | None = None) ->
 
 
 def daemon_stop(env: dict[str, str] | None = None) -> int:
-    """Signal and stop the running resident daemon process."""
+    """Signal and stop the running resident daemon process, cleaning stale artifacts if dead."""
     p_path = pid_path(env)
     s_path = socket_path(env)
 
     if not p_path.exists():
-        sys.stdout.write("OTP-Local daemon is not running (no PID file).\n")
-        return 0
-
-    try:
-        pid = int(p_path.read_text(encoding="ascii").strip())
-        os.kill(pid, signal.SIGTERM)
-
-        # Wait up to 5 seconds for daemon to terminate
-        for _ in range(50):
-            try:
-                os.kill(pid, 0)
-                time.sleep(0.1)
-            except OSError:
-                break
-        else:
-            # Force kill if still active
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except OSError:
-                pass
-
-        if p_path.exists():
-            try:
-                p_path.unlink()
-            except OSError:
-                pass
         if s_path.exists():
             try:
                 s_path.unlink()
             except OSError:
                 pass
-
-        sys.stdout.write(f"OTP-Local daemon (PID {pid}) stopped.\n")
+        sys.stdout.write("OTP-Local daemon is not running (no PID file).\n")
         return 0
+
+    try:
+        raw_pid = p_path.read_text(encoding="ascii").strip()
+        pid = int(raw_pid)
+        if pid <= 0:
+            raise ValueError("Invalid non-positive PID")
+    except ValueError, OSError:
+        try:
+            p_path.unlink()
+        except OSError:
+            pass
+        if s_path.exists():
+            try:
+                s_path.unlink()
+            except OSError:
+                pass
+        sys.stdout.write("Removed corrupted PID file. Daemon is not running.\n")
+        return 0
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        try:
+            p_path.unlink()
+        except OSError:
+            pass
+        if s_path.exists():
+            try:
+                s_path.unlink()
+            except OSError:
+                pass
+        sys.stdout.write(
+            f"Daemon process {pid} is no longer running. Cleaned up stale PID and socket files.\n"
+        )
+        return 0
+    except PermissionError:
+        sys.stderr.write(f"Permission denied stopping daemon process {pid}.\n")
+        return 3
     except OSError as exc:
         sys.stderr.write(f"Error stopping daemon: {exc}\n")
         return 3
+
+    # Wait up to 5 seconds for daemon to terminate
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+            time.sleep(0.1)
+        except OSError:
+            break
+    else:
+        # Force kill if still active
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+
+    if p_path.exists():
+        try:
+            p_path.unlink()
+        except OSError:
+            pass
+    if s_path.exists():
+        try:
+            s_path.unlink()
+        except OSError:
+            pass
+
+    sys.stdout.write(f"OTP-Local daemon (PID {pid}) stopped.\n")
+    return 0
+
+
+def daemon_clean(env: dict[str, str] | None = None) -> int:
+    """Detect and clean up stale PID files and orphaned socket bindings."""
+    p_path = pid_path(env)
+    s_path = socket_path(env)
+    cleaned_any = False
+
+    if p_path.exists():
+        try:
+            raw_pid = p_path.read_text(encoding="ascii").strip()
+            pid = int(raw_pid)
+            if pid <= 0:
+                raise ValueError("Invalid non-positive PID")
+            try:
+                os.kill(pid, 0)
+                # Process is actively running
+                ping_resp = send_ipc_request({"action": "ping"}, sock_path=s_path, timeout=1.0)
+                if ping_resp and ping_resp.get("status") == "ok":
+                    sys.stdout.write(
+                        f"Cannot clean: OTP-Local daemon is actively running (PID {pid}).\n"
+                    )
+                    return 1
+                else:
+                    sys.stdout.write(f"Warning: Process {pid} is running but unresponsive.\n")
+                    return 1
+            except ProcessLookupError:
+                try:
+                    p_path.unlink()
+                except OSError:
+                    pass
+                sys.stdout.write(f"Removed stale PID file: {p_path} (PID {pid} was dead)\n")
+                cleaned_any = True
+            except PermissionError:
+                sys.stdout.write(f"Cannot clean: PID {pid} is owned by another user.\n")
+                return 1
+        except ValueError, OSError:
+            try:
+                p_path.unlink()
+            except OSError:
+                pass
+            sys.stdout.write(f"Removed corrupted PID file: {p_path}\n")
+            cleaned_any = True
+
+    if s_path.exists():
+        ping_resp = send_ipc_request({"action": "ping"}, sock_path=s_path, timeout=0.5)
+        if ping_resp and ping_resp.get("status") == "ok":
+            sys.stdout.write(f"Socket {s_path} is active. Daemon is listening.\n")
+        else:
+            try:
+                s_path.unlink()
+            except OSError:
+                pass
+            sys.stdout.write(f"Removed orphaned socket file: {s_path}\n")
+            cleaned_any = True
+
+    if not cleaned_any:
+        sys.stdout.write("No stale daemon artifacts found.\n")
+    return 0
+
+
+def daemon_restart(foreground: bool = False, env: dict[str, str] | None = None) -> int:
+    """Gracefully stop running daemon (if active) and start fresh daemon instance."""
+    p_path = pid_path(env)
+    if p_path.exists():
+        daemon_stop(env=env)
+        time.sleep(0.2)
+    return daemon_start(foreground=foreground, env=env)
 
 
 def daemon_status(env: dict[str, str] | None = None) -> int:
@@ -473,8 +680,10 @@ def daemon_status(env: dict[str, str] | None = None) -> int:
 
     try:
         pid = int(p_path.read_text(encoding="ascii").strip())
+        if pid <= 0:
+            raise ValueError("Invalid non-positive PID")
         os.kill(pid, 0)
-    except OSError:
+    except ValueError, OSError:
         sys.stdout.write("Status: dead (stale PID file exists)\n")
         return 0
 

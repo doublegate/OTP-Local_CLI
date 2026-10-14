@@ -28,13 +28,13 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
 
       - name: Install system dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends qrencode fzf
+          sudo apt-get install -y --no-install-recommends qrencode fzf libpam0g-dev
 
       - name: Install Python dependencies
         run: |
@@ -66,15 +66,26 @@ jobs:
         run: |
           npx markdownlint-cli2
 
+      - name: Run shellcheck
+        run: |
+          shellcheck scripts/check.sh
+
       - name: Build package distribution
         run: |
           python -m build --no-isolation
-          python -m pip wheel --wheel-dir dist/wheels --quiet "textual>=0.80.0"
+          (cd dist && sha256sum authy_local-2.0.1* > SHA256SUMS && sha256sum -c SHA256SUMS --strict)
+          python -m pip wheel --wheel-dir dist/wheels --quiet "textual>=0.80.0" "fido2>=2.0.0" "pluggy>=1.0.0"
 
-      - name: Run test suite
+      - name: Run test suite with coverage
         run: |
-          python -m pytest tests -v
+          python -m coverage run -m pytest tests -v
+          python -m coverage report --fail-under=75
+          python -m coverage report --include='*/models.py,*/backends/onepassword.py' --fail-under=100
 
       - name: Verify package smoke test
         run: |
           python scripts/smoke_package.py
+
+      - name: Verify package distribution checksums
+        run: |
+          cd dist && sha256sum -c SHA256SUMS --strict

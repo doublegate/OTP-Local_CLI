@@ -11,6 +11,7 @@ from pathlib import Path
 
 from ..enrollment import OtpParameters, generate_totp_code
 from ..errors import AppError
+from ..security import secure_zero
 
 CREDENTIAL_TARGET_PREFIX = "OTP-Local:"
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
@@ -412,19 +413,19 @@ def dpapi_code(account: str, env: dict[str, str], timestamp: float | None = None
     except AppError:
         raise AppError(4) from None
 
-    raw_secret_bytes = dpapi_decrypt(ciphertext, entropy=_get_entropy(env))
-    if not raw_secret_bytes:
+    decrypted = dpapi_decrypt(ciphertext, entropy=_get_entropy(env))
+    if not decrypted:
         raise AppError(5)
 
-    raw_secret = raw_secret_bytes.decode("utf-8", errors="replace").strip()
+    raw_secret_buf = bytearray(decrypted)
+    raw_secret = raw_secret_buf.decode("utf-8", errors="replace").strip()
     try:
         params = OtpParameters(secret=raw_secret, account=account)
         code, _ = generate_totp_code(params, timestamp=timestamp)
         return code
     finally:
         raw_secret = ""
-        if isinstance(raw_secret_bytes, (bytearray, bytes)):
-            raw_secret_bytes = b"\x00" * len(raw_secret_bytes)
+        secure_zero(raw_secret_buf)
 
 
 def dpapi_enroll(account: str, secret: str, env: dict[str, str]) -> None:

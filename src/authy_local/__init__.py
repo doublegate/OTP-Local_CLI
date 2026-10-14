@@ -1,6 +1,6 @@
 """OTP-Local CLI: Universal Two-Factor Authentication Terminal Companion and Security Layer.
 
-Frozen Public Python API for v2.0.0 LTS.
+Frozen Public Python API for v2.0.1 LTS.
 """
 
 from .async_core import (
@@ -40,7 +40,7 @@ from .security import (
     secure_zero,
 )
 
-__version__ = "2.0.0"
+__version__ = "2.0.1"
 
 __all__ = [
     # Version

@@ -1,8 +1,10 @@
 # Local terminal user interface
 
 Run `otp-local tui` in a private, real terminal. The interface is built on the
-Textual framework for Python 3.14 on Linux, providing a responsive, async reactive
-terminal console with live countdowns and zero network activity.
+Textual framework for Python 3.14 (with legacy curses helpers isolated in `authy_local._curses_compat`),
+providing a responsive, async reactive terminal console with live `TotpProgressBar` countdowns,
+3-tier fuzzy match highlighting (`Exact`, `Prefix`, `Subsequence`), `CopyToast` notifications,
+`HelpModal` shortcut overlay, debounced `OptionList` search (~1.5 ms for 150 rows), and zero network activity.
 
 ## Dashboard and design
 
@@ -40,19 +42,23 @@ The preview contains synthetic UI state only, with no account or vault data.
 | 7 | Non-authenticating doctor capability summary |
 | 8 | Preview installation of a supplied local wheel |
 | 9 | Private migration checkpoint guide |
-| b | Choose backend (1Password, pass-otp, totpm, yubikey, tpm2-totp) |
+| b | Choose backend (1Password, Bitwarden, KeePassXC, Federated, pass-otp, totpm, yubikey, tpm2-totp, keychain, dpapi, fido2) |
 | v | Display UTF-8 terminal QR code modal for mobile scanning |
 | u | Open interactive Credential Security Audit report modal |
 | f | Filter by folder / account namespace hierarchy |
-| d or Del | Confirmed deletion of single selected local GPG/TPM credential |
-| F1 or ? | Keyboard help |
+| d or Del | Confirmed deletion of single selected local GPG/TPM/Keychain/DPAPI/FIDO2 credential |
+| F1 or ? | Keyboard help (`HelpModal`) |
 | q or Escape | Quit from the dashboard |
 
 Choosing a backend changes the scope form for subsequent actions; it does not
 contact that backend or fall back to another store. 1Password is the initial
 backend. Opening action 1 or 2 explicitly lists scoped metadata in the native
 Textual browser. The dashboard does not load an inventory automatically or in the
-background. Search supports structured prefixes (`type:`, `tag:`, `algo:`, `digits:`).
+background. Search supports structured prefixes (`type:`, `tag:`, `algo:`, `digits:`) and
+renders 3-tier fuzzy match highlights (`bold #3fb950` for exact/prefix, `underline #58a6ff`
+for subsequence matches). Upon modal dismissal or widget unmount (`AddOtpModal`, `ScopeModal`,
+`ConfirmDeleteModal`, `UnlockModal`), all input widget buffers and internal secret bytearrays
+are deterministically zeroized in memory.
 
 ## Resident scope and item browser
 

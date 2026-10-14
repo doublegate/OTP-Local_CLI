@@ -5,11 +5,10 @@ import io
 import os
 import re
 import shutil
-import textwrap
 import time
 from collections.abc import Callable
 from contextlib import contextmanager
-from pathlib import Path
+from typing import Any
 
 from rich.table import Table
 from rich.text import Text
@@ -127,831 +126,29 @@ class Capture(io.StringIO):
         return super().write(text)
 
 
-def safe_text(text):
-    return "".join(char if char.isprintable() else "?" for char in str(text))
-
-
-def write(screen, row, column, text, width, attr=0):
-    """Clip every write, including the terminal's unsafe lower-right cell."""
-    height, columns = screen.getmaxyx()
-    if not 0 <= row < height or not 0 <= column < columns - 1:
-        return
-    size = min(width, columns - column - 1)
-    if size <= 0:
-        return
-    if attr and hasattr(screen, "attron"):
-        screen.attron(attr)
-    screen.addnstr(row, column, safe_text(text), size)
-    if attr and hasattr(screen, "attroff"):
-        screen.attroff(attr)
-
-
-def panel(screen, row, column, height, width, title, attr=0):
-    unicode_lines = "UTF" in getattr(screen, "encoding", "UTF-8").upper()
-    left, top, right, side, lower_left, lower_right = (
-        ("╭", "─", "╮", "│", "╰", "╯") if unicode_lines else ("+", "-", "+", "|", "+", "+")
-    )
-    write(screen, row, column, left + top * (width - 2) + right, width, attr)
-    write(screen, row, column + 2, " " + title + " ", width - 4, attr)
-    for y in range(row + 1, row + height - 1):
-        write(screen, y, column, side, 1, attr)
-        write(screen, y, column + width - 1, side, 1, attr)
-    write(
-        screen, row + height - 1, column, lower_left + top * (width - 2) + lower_right, width, attr
-    )
-
-
-def palette(curses):
-    """Optional color with a legible monochrome reverse-video fallback."""
-    colors = {"border": getattr(curses, "A_BOLD", 0), "selected": getattr(curses, "A_REVERSE", 0)}
-    try:
-        if curses.has_colors():
-            curses.start_color()
-            curses.use_default_colors()
-            curses.init_pair(1, curses.COLOR_CYAN, -1)
-            curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_CYAN)
-            colors = {"border": curses.color_pair(1), "selected": curses.color_pair(2)}
-    except AttributeError, curses.error:
-        pass
-    return colors
-
-
-def dashboard(
-    screen, curses, selected, backend, status="Local capabilities not checked", detail=None
-):
-    height, width = screen.getmaxyx()
-    colors = getattr(curses, "dashboard_colors", {})
-    screen.erase()
-    write(screen, 0, 2, "Authy Local  |  PRIVATE OTP CONSOLE", width - 4, colors.get("border", 0))
-    label = dict(BACKENDS)[backend]
-    write(screen, 1, 2, f"Backend: {label}   [b] change", width - 4)
-    sidebar = 25 if width >= 80 else 23
-    body_height = height - (9 if height >= 24 else 7)
-    panel(screen, 3, 1, body_height, sidebar, "Actions", colors.get("border", 0))
-    for index, (name, _) in enumerate(ACTIONS):
-        name = {
-            "Installation preview": "Install preview",
-            "Private migration guide": "Migration guide",
-            "Add OTP entry": "Add OTP",
-        }.get(name, name)
-        write(
-            screen,
-            5 + index,
-            3,
-            f"{index + 1} {name}".ljust(sidebar - 4),
-            sidebar - 4,
-            colors.get("selected", 0) if index == selected else 0,
-        )
-        if index == selected:
-            write(screen, 5 + index, 2, ">", 1)
-    right = sidebar + 2
-    panel(screen, 3, right, body_height, width - right - 1, "Workspace", colors.get("border", 0))
-    lines = detail or [
-        ACTIONS[selected][0],
-        "",
-        ACTIONS[selected][1],
-        "",
-        "Saved scope per backend; [p] configure.",
-        "No account changes here.",
-    ]
-    row = 5
-    for line in lines:
-        for wrapped in textwrap.wrap(safe_text(line), max(1, width - right - 5)) or [""]:
-            if row < 3 + body_height - 1:
-                write(screen, row, right + 2, wrapped, width - right - 5)
-                row += 1
-    if height >= 24:
-        panel(screen, height - 6, 1, 3, width - 2, "Session status", colors.get("border", 0))
-        write(screen, height - 5, 3, status, width - 6)
-    else:
-        write(screen, height - 3, 2, status, width - 4)
-    write(
-        screen,
-        height - 2,
-        2,
-        "Arrows/jk Move  Enter Open  b Backend  p Scope  ? Help  q Quit",
-        width - 4,
-        colors.get("border", 0),
-    )
-    screen.refresh()
-
-
-def paint(screen, lines):
-    height, width = screen.getmaxyx()
-    screen.erase()
-    for row, line in enumerate(lines[: max(0, height - 1)]):
-        write(screen, row, 0, line, width - 1)
-    screen.refresh()
-
-
-def message(screen, lines):
-    offset = 0
-    try:
-        while True:
-            height, width = screen.getmaxyx()
-            if height < 18 or width < 60:
-                return
-            wrapped = []
-            for line in lines:
-                wrapped.extend(textwrap.wrap(safe_text(line), width - 6) or [""])
-            page = max(1, height - 5)
-            offset = min(offset, max(0, len(wrapped) - 1))
-            screen.erase()
-            panel(screen, 1, 1, height - 3, width - 2, "Result / private session")
-            for row, line in enumerate(wrapped[offset : offset + page], 2):
-                write(screen, row, 3, line, width - 6)
-            footer = (
-                "Enter: next page  Arrows: scroll  Esc: erase and return"
-                if offset + page < len(wrapped)
-                else "Any key: return and erase displayed code."
-            )
-            write(screen, height - 2, 2, footer, width - 4)
-            screen.refresh()
-            key = screen.getch()
-            if key == 410:
-                continue
-            if key == 27:
-                break
-            if key in (258, ord("j")):
-                offset = min(offset + 1, max(0, len(wrapped) - page))
-            elif key in (259, ord("k")):
-                offset = max(0, offset - 1)
-            elif offset + page < len(wrapped):
-                offset += page
-            else:
-                break
-    finally:
-        screen.erase()
-        screen.refresh()
-
-
-def prompt(screen, label, limit, curses):
-    value = ""
-    overflow = False
-    while True:
-        paint(
-            screen,
-            [
-                label,
-                f"Hidden entry: {len(value)} characters",
-                "Invalid or overlong entry; cancel and retry."
-                if overflow
-                else "Enter accepts; Escape cancels.",
-            ],
-        )
-        key = screen.getch()
-        if key in (27, curses.KEY_RESIZE):
-            screen.erase()
-            screen.refresh()
-            return None
-        if key in (10, 13):
-            return None if overflow else value
-        if key in (8, 127, curses.KEY_BACKSPACE):
-            value = value[:-1]
-        elif 32 <= key <= 126:
-            if len(value) < limit:
-                value += chr(key)
-            else:
-                overflow = True
-        elif 0 <= key <= 255:
-            overflow = True
-
-
-def execute(screen, args, dispatch, curses, preview=None):
-    output, diagnostic = Capture(), Capture()
-    status = 3
-    curses.def_prog_mode()
-    curses.endwin()
-    try:
-        if args[0] == "preview":
-            if preview is not None:
-                status = preview(args[1], output, diagnostic)
-        else:
-            status = dispatch(args, output, diagnostic)
-    except AppError as error:
-        status = error.exit_code
-    except KeyboardInterrupt:
-        status = 130
-    except Exception:
-        # A UI callback failure must not expose private values through a traceback.
-        status = 3
-    finally:
-        curses.reset_prog_mode()
-        curses.doupdate()
-        screen.erase()
-        screen.refresh()
-    lines = []
-    summary = None
-    if args[0] == "doctor":
-        # Only the CLI's fixed capability names and states may enter the screen.
-        names = {
-            "platform",
-            "python",
-            "op",
-            "fish",
-            "fzf",
-            "wl-copy",
-            "pbcopy",
-            "clock",
-            "authentication",
-            "pass",
-            "gpg",
-            "oathtool",
-            "totpm",
-            "yubikey",
-            "tpm2-totp",
-            "tpm-device",
-            "keychain",
-            "secure-enclave",
-            "dpapi",
-            "credman",
-            "windows-hello",
-            "fido2",
-            "qrencode",
-            "pinentry",
-            "gpg-agent",
-        }
-        states = {}
-        for line in output.getvalue().splitlines():
-            name, separator, state = line.partition(": ")
-            if (
-                separator
-                and name in names
-                and state
-                in {
-                    "available",
-                    "missing",
-                    "unknown",
-                    "not-applicable",
-                }
-            ):
-                states[name] = state
-        lines = [f"{name}: {state}" for name, state in states.items() if state != "not-applicable"]
-        if status or not lines:
-            status = status or 5
-            lines.append(MESSAGES.get(status, MESSAGES[3]))
-            summary = f"Doctor failed (exit {status}); press 1 to retry"
-        else:
-            summary_states = ["available", "missing", "unknown"]
-            if any(value == "not-applicable" for value in states.values()):
-                summary_states.append("not-applicable")
-            summary = "Doctor: " + ", ".join(
-                f"{sum(value == state for value in states.values())} {state}"
-                for state in summary_states
-            )
-    elif status:
-        lines = [MESSAGES.get(status, MESSAGES[3])]
-    elif args[0] in ("show", "select") and "--copy" not in args:
-        try:
-            lines = ["Code", parse_code(output.getvalue().encode("ascii"))]
-        except AppError, UnicodeError:
-            lines = [MESSAGES[5]]
-    elif args[0] == "preview":
-        lines = ["Preview only; no changes authorized.", *output.getvalue().splitlines()]
-    else:
-        lines = ["Copy completed. Clipboard history behavior is controlled by your desktop."]
-    output.close()
-    diagnostic.close()
-    message(screen, lines)
-    return summary
-
-
-def form(screen, curses, title, fields, initial=None):
-    """One hidden, editable form; validation never dispatches incomplete scope."""
-    values = list(initial) if initial is not None else [""] * len(fields)
-    invalid = [False] * len(fields)
-    active = 0
-    error = ""
-    while True:
-        height, width = screen.getmaxyx()
-        if height < 18 or width < 60:
-            return None
-        screen.erase()
-        colors = getattr(curses, "dashboard_colors", {})
-        panel(screen, 1, 1, height - 3, width - 2, title, colors.get("border", 0))
-        write(screen, 3, 3, "Private scope - input hidden", width - 6)
-        for index, (label, limit, _) in enumerate(fields):
-            row = 5 + index * 2
-            marker = ">" if index == active else " "
-            write(
-                screen,
-                row,
-                3,
-                f"{marker} {label}",
-                width - 6,
-                colors.get("selected", 0) if index == active else 0,
-            )
-            write(
-                screen,
-                row + 1,
-                5,
-                f"Hidden: {len(values[index])} characters (limit {limit})",
-                width - 8,
-            )
-        write(
-            screen,
-            height - 5,
-            3,
-            error or "Tab/Arrows move; Enter advances then submits",
-            width - 6,
-        )
-        write(
-            screen,
-            height - 4,
-            3,
-            "Backspace edits; Ctrl-U clears field. Escape cancels.",
-            width - 6,
-        )
-        screen.refresh()
-        key = screen.getch()
-        if key == 27:
-            screen.erase()
-            screen.refresh()
-            return None
-        if key == curses.KEY_RESIZE:
-            continue
-        if key in (9, 258, 259, 353):
-            active = (active + (-1 if key in (259, 353) else 1)) % len(fields)
-            error = ""
-        elif key in (10, 13):
-            _, _, validator = fields[active]
-            if invalid[active] or not validator(values[active]):
-                error = "Required valid value; edit this field or Escape to cancel."
-            elif active < len(fields) - 1:
-                active += 1
-                error = ""
-            else:
-                bad = next(
-                    (
-                        i
-                        for i, (_, _, check) in enumerate(fields)
-                        if invalid[i] or not check(values[i])
-                    ),
-                    None,
-                )
-                if bad is None:
-                    screen.erase()
-                    screen.refresh()
-                    return values
-                active = bad
-                error = "Required valid value; edit this field or Escape to cancel."
-        elif key == 21:
-            values[active] = ""
-            invalid[active] = False
-            error = ""
-        elif key in (8, 127, curses.KEY_BACKSPACE):
-            values[active] = values[active][:-1]
-            if not values[active]:
-                invalid[active] = False
-            error = ""
-        elif 32 <= key <= 126:
-            if len(values[active]) < fields[active][1]:
-                values[active] += chr(key)
-            else:
-                invalid[active] = True
-                error = "Entry too long; clear this field completely to retry."
-        elif 0 <= key <= 255:
-            invalid[active] = True
-            error = "Unsupported character; clear this field completely to retry."
-
-
-def scope_fields(backend):
-    def identifier(value):
-        return len(value) == 26 and value.isascii() and value.isalnum()
-
-    def path(value):
-        return value.startswith("/") and "\x00" not in value
-
-    if backend == "onepassword":
-        return [
-            ("Account ID (26 characters)", 26, identifier),
-            ("Vault ID (26 characters)", 26, identifier),
-        ]
-    if backend == "pass-otp":
-        return [("Store absolute path", 1024, path), ("GPG key-home absolute path", 1024, path)]
-    if backend == "totpm":
-        return [("Configuration absolute path", 1024, path)]
-    return []
-
-
-def profile_values(backend, values):
-    return dict(zip(PROFILE_FIELDS[backend], values, strict=True))
-
-
-def configure_scope(screen, curses, backend, profile):
-    from .tui_profiles import valid_tag
-
-    root = Path.home() / ".local/share/authy-local/optional"
-    defaults = {
-        "onepassword": {"account": "", "vault": ""},
-        "pass-otp": {"store": str(root / "pass-store"), "key_home": str(root / "gnupg")},
-        "totpm": {"config": str(Path.home() / ".config/authy-local/totpm.conf")},
-        "yubikey": {},
-        "tpm2-totp": {},
-        "keychain": {},
-        "dpapi": {},
-        "fido2": {},
-    }
-    fields = scope_fields(backend)
-    initial = [(profile or defaults[backend])[name] for name in PROFILE_FIELDS[backend]]
-    if backend == "onepassword":
-        fields.append(("Item tag (blank = all Login items)", 64, valid_tag))
-        initial.append((profile or {}).get("tag", "OTP"))
-    values = form(
-        screen,
-        curses,
-        "Saved scope - IDs, paths and optional tag",
-        fields,
-        initial=initial,
-    )
-    if values is None:
-        return None
-    scope = profile_values(backend, values[: len(PROFILE_FIELDS[backend])])
-    if backend == "onepassword":
-        scope["tag"] = values[-1]
-    return scope
-
-
-def scope_form(screen, curses, backend, selection, profile=None):
-    from .tui_items import arguments
-
-    profile = profile or {}
-    fields = [] if profile else scope_fields(backend)
-    base_count = len(fields)
-    if not selection:
-        if backend == "onepassword":
-            fields += [
-                (
-                    "Item ID (26 characters)",
-                    26,
-                    lambda value: len(value) == 26 and value.isascii() and value.isalnum(),
-                )
-            ]
-        else:
-            from .backends.local import LABEL
-
-            fields += [
-                (
-                    "Entry label" if backend == "pass-otp" else "Service label",
-                    64,
-                    lambda value: LABEL.fullmatch(value) is not None,
-                )
-            ]
-            if backend == "totpm":
-                fields += [("Account label", 64, lambda value: LABEL.fullmatch(value) is not None)]
-    if not fields:
-        values = []
-    else:
-        values = form(screen, curses, f"{dict(BACKENDS)[backend]} scope", fields)
-    if values is None:
-        return None
-    scope = profile or profile_values(backend, values[:base_count])
-    if selection:
-        if backend == "onepassword":
-            return ["--account", scope["account"], "--vault", scope["vault"]]
-        if backend == "pass-otp":
-            return [
-                "--backend",
-                backend,
-                "--store",
-                scope["store"],
-                "--key-home",
-                scope["key_home"],
-            ]
-        if backend == "totpm":
-            return ["--backend", backend, "--config", scope["config"]]
-        return ["--backend", backend]
-    chosen = values[base_count:]
-    key = ":".join(chosen) if backend == "totpm" else chosen[0]
-    return arguments(backend, scope, key)
-
-
-def load_records(screen, curses, backend, profile):
-    from .tui_items import records
-
-    curses.def_prog_mode()
-    curses.endwin()
-    failure = None
-    rows = None
-    try:
-        rows = records(backend, profile, dict(os.environ))
-    except AppError as error:
-        failure = error.exit_code
-    except KeyboardInterrupt:
-        failure = 130
-    except Exception:
-        failure = 3
-    finally:
-        curses.reset_prog_mode()
-        curses.doupdate()
-        screen.erase()
-        screen.refresh()
-    if failure is not None:
-        message(screen, [MESSAGES.get(failure, MESSAGES[3])])
-    return rows
-
-
-def confirm_delete(screen, curses, backend, label):
-    """Default-cancel confirmation identifies exactly one local entry."""
-    confirmation = ""
-    try:
-        while True:
-            height, width = screen.getmaxyx()
-            if height < 18 or width < 60:
-                return False
-            screen.erase()
-            panel(screen, 1, 1, height - 3, width - 2, "Delete one local entry")
-            lines = [
-                f"Backend: {dict(BACKENDS)[backend]}",
-                "Selected entry:",
-                *textwrap.wrap(safe_text(label), width - 8),
-                "",
-                "Confirm independent recovery before removing this entry.",
-                "This removes its local record. Backups and other copies remain.",
-                "Type DELETE and press Enter. Escape cancels.",
-            ]
-            row = 3
-            for line in lines:
-                for part in textwrap.wrap(line, width - 6) or [""]:
-                    write(screen, row, 3, part, width - 6)
-                    row += 1
-            write(screen, height - 3, 3, "Confirmation: " + confirmation, width - 6)
-            screen.refresh()
-            key = screen.getch()
-            if key in (27, curses.KEY_RESIZE):
-                return False
-            if key in (10, 13):
-                if confirmation == "DELETE":
-                    return True
-                confirmation = ""
-            elif key in (8, 127, curses.KEY_BACKSPACE):
-                confirmation = confirmation[:-1]
-            elif 32 <= key <= 126 and len(confirmation) < 16:
-                confirmation += chr(key)
-    finally:
-        screen.erase()
-        screen.refresh()
-
-
-def delete_record(screen, curses, backend, profile, key):
-    from .tui_items import remove
-
-    failure = None
-    curses.def_prog_mode()
-    curses.endwin()
-    try:
-        remove(backend, profile, key, dict(os.environ))
-    except AppError as error:
-        failure = error.exit_code
-    except KeyboardInterrupt:
-        failure = 130
-    except Exception:
-        failure = 3
-    finally:
-        curses.reset_prog_mode()
-        curses.doupdate()
-        screen.erase()
-        screen.refresh()
-    message(
-        screen,
-        [MESSAGES.get(failure, MESSAGES[3])]
-        if failure is not None
-        else ["Local entry deleted. Backups and other copies remain."],
-    )
-    return failure is None
-
-
-def browse(screen, curses, backend, profile, dispatch, listing, default):
-    """Render ephemeral metadata; request an OTP only on explicit selection."""
-    from .tui_items import arguments
-
-    rows = listing()
-    if rows is None:
-        return
-    selected, query, searching = 0, "", False
-    try:
-        while True:
-            height, width = screen.getmaxyx()
-            if height < 18 or width < 60:
-                return
-            matches = [(key, label) for key, label in rows if query.casefold() in label.casefold()]
-            selected = min(selected, max(0, len(matches) - 1))
-            screen.erase()
-            panel(screen, 1, 1, height - 3, width - 2, f"{dict(BACKENDS)[backend]} items")
-            write(screen, 2, 3, f"Search: {query}" + ("_" if searching else ""), width - 6)
-            write(
-                screen,
-                3,
-                3,
-                f"{len(matches)} matches / {len(rows)} items; Enter: {default}",
-                width - 6,
-            )
-            count = height - 8
-            top = max(0, selected - count + 1)
-            for index, (_, label) in enumerate(matches[top : top + count], top):
-                write(
-                    screen,
-                    5 + index - top,
-                    3,
-                    ("> " if index == selected else "  ") + label,
-                    width - 6,
-                    getattr(curses, "A_REVERSE", 0) if index == selected else 0,
-                )
-            if not matches:
-                write(screen, 5, 3, "No matching items. / Search  r Refresh  Esc Back", width - 6)
-            write(
-                screen,
-                height - 3,
-                3,
-                (
-                    "Arrows/jk  / Search  s Show  c Copy  d Delete  r Refresh  Esc"
-                    if backend in {"pass-otp", "totpm"}
-                    else "Arrows/jk Move  / Search  s Show  c Copy  r Refresh  Esc Back"
-                ),
-                width - 6,
-            )
-            screen.refresh()
-            key = screen.getch()
-            if searching:
-                if key in (27, 10, 13):
-                    searching = False
-                elif key in (8, 127, curses.KEY_BACKSPACE):
-                    query = query[:-1]
-                    selected = 0
-                elif 32 <= key <= 126 and len(query) < 160:
-                    query += chr(key)
-                    selected = 0
-                continue
-            if key == 27:
-                return
-            if key == curses.KEY_RESIZE:
-                continue
-            if key in (258, ord("j")):
-                selected = min(selected + 1, max(0, len(matches) - 1))
-            elif key in (259, ord("k")):
-                selected = max(0, selected - 1)
-            elif key == ord("/"):
-                searching = True
-            elif key == ord("r"):
-                refreshed = listing()
-                if refreshed is not None:
-                    rows = refreshed
-            elif matches and key == ord("d") and backend in {"pass-otp", "totpm"}:
-                chosen, label = matches[selected]
-                if confirm_delete(screen, curses, backend, label):
-                    if delete_record(screen, curses, backend, profile, chosen):
-                        rows = [(item, text) for item, text in rows if item != chosen]
-                        refreshed = listing()
-                        if refreshed is not None:
-                            rows = refreshed
-            elif matches and key in (10, 13, ord("s"), ord("c")):
-                verb = "copy" if key == ord("c") else "show" if key == ord("s") else default
-                execute(
-                    screen,
-                    [verb] + arguments(backend, profile, matches[selected][0]),
-                    dispatch,
-                    curses,
-                )
-    finally:
-        screen.erase()
-        screen.refresh()
-
-
-def choose_backend(screen, curses, current, status="Local capabilities not checked"):
-    selected = [name for name, _ in BACKENDS].index(current)
-    while True:
-        dashboard(
-            screen,
-            curses,
-            0,
-            current,
-            status=status,
-            detail=[
-                "Choose backend",
-                "",
-                *[
-                    f"{'>' if i == selected else ' '} {i + 1} {label}"
-                    for i, (_, label) in enumerate(BACKENDS)
-                ],
-                "",
-                "Enter selects; Escape cancels.",
-            ],
-        )
-        key = screen.getch()
-        if key == 27:
-            return current
-        if key in (258, ord("j")):
-            selected = (selected + 1) % len(BACKENDS)
-        elif key in (259, ord("k")):
-            selected = (selected - 1) % len(BACKENDS)
-        elif key in map(ord, "123"):
-            return BACKENDS[key - ord("1")][0]
-        elif key in (10, 13):
-            return BACKENDS[selected][0]
-
-
-def session(screen, dispatch, curses, preview=None, *, profiles=None, save_profiles=None):
-    selected, backend = 0, "onepassword"
-    status = "Local capabilities not checked"
-    profiles = {} if profiles is None else profiles
-    curses.dashboard_colors = palette(curses)
-    while True:
-        height, width = screen.getmaxyx()
-        if height < 18 or width < 60:
-            paint(screen, ["Terminal too small; resize to at least 60 x 18."])
-            key = screen.getch()
-            if key == curses.KEY_RESIZE:
-                continue
-            return 0 if key in (ord("q"), 27) else 3
-        dashboard(screen, curses, selected, backend, status=status)
-        key = screen.getch()
-        if key in (ord("q"), ord("Q"), 27):
-            screen.erase()
-            screen.refresh()
-            return 0
-        if key in (258, ord("j")):
-            selected = (selected + 1) % len(ACTIONS)
-            continue
-        if key in (259, ord("k")):
-            selected = (selected - 1) % len(ACTIONS)
-            continue
-        if key in (ord("b"), ord("B")):
-            backend = choose_backend(screen, curses, backend, status)
-            continue
-        if key in (265, ord("?")):
-            message(screen, HELP)
-            continue
-        if key in (10, 13):
-            key = ord("1") + selected
-        elif key in map(ord, "123456789"):
-            selected = key - ord("1")
-        if key in (ord("6"), ord("p"), ord("P")):
-            profile = configure_scope(screen, curses, backend, profiles.get(backend))
-            if profile is not None:
-                candidate = {**profiles, backend: profile}
-                try:
-                    if save_profiles is not None:
-                        save_profiles(candidate)
-                    profiles = candidate
-                except AppError as error:
-                    message(screen, [MESSAGES.get(error.exit_code, MESSAGES[3])])
-            continue
-        if key == ord("9"):
-            message(screen, GUIDE)
-        elif key == ord("7"):
-            status = execute(screen, ["doctor"], dispatch, curses)
-        elif key == ord("8"):
-            values = form(
-                screen,
-                curses,
-                "Installation preview only",
-                [("Local wheel path", 1024, lambda value: bool(value.strip()))],
-            )
-            if values:
-                execute(screen, ["preview", values[0]], dispatch, curses, preview)
-        elif key == ord("5") or key in (ord("a"), ord("A")):
-            message(
-                screen,
-                [
-                    "Interactive OTP enrollment",
-                    "Please run in modern Textual TUI for interactive enrollment.",
-                ],
-            )
-        elif key in map(ord, "1234"):
-            if backend not in profiles:
-                profile = configure_scope(screen, curses, backend, None)
-                if profile is None:
-                    continue
-                candidate = {**profiles, backend: profile}
-                try:
-                    if save_profiles is not None:
-                        save_profiles(candidate)
-                    profiles = candidate
-                except AppError as error:
-                    message(screen, [MESSAGES.get(error.exit_code, MESSAGES[3])])
-                    continue
-            if key in map(ord, "12"):
-                browse(
-                    screen,
-                    curses,
-                    backend,
-                    profiles[backend],
-                    dispatch,
-                    lambda chosen=backend, scope=profiles[backend]: load_records(
-                        screen, curses, chosen, scope
-                    ),
-                    "copy" if key == ord("2") else "show",
-                )
-            else:
-                try:
-                    scope = scope_form(screen, curses, backend, False, profiles[backend])
-                except AppError as error:
-                    message(screen, [MESSAGES.get(error.exit_code, MESSAGES[3])])
-                    continue
-                if scope is not None:
-                    execute(
-                        screen, ["show" if key == ord("3") else "copy"] + scope, dispatch, curses
-                    )
+# Legacy curses compatibility exports (deprecated; retained for backward compatibility)
+from ._curses_compat import (  # noqa: E402, I001
+    browse as browse,
+    choose_backend as choose_backend,
+    configure_scope as configure_scope,
+    confirm_delete as confirm_delete,
+    dashboard as dashboard,
+    delete_record as delete_record,
+    execute as execute,
+    form as form,
+    load_records as load_records,
+    message as message,
+    paint as paint,
+    palette as palette,
+    panel as panel,
+    profile_values as profile_values,
+    prompt as prompt,
+    safe_text as safe_text,
+    scope_fields as scope_fields,
+    scope_form as scope_form,
+    session as session,
+    write as write,
+)
 
 
 # =============================================================================
@@ -1591,6 +788,8 @@ class CodeDisplayModal(ModalScreen[None]):
         self._timer = None
         self._initial_step: int | None = None
         self._is_expired: bool = False
+        self._code_digits: Static | None = None
+        self._code_item_label: Static | None = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="code-dialog"):
@@ -1616,6 +815,14 @@ class CodeDisplayModal(ModalScreen[None]):
         return clean or "------"
 
     def on_mount(self) -> None:
+        try:
+            self._code_digits = self.query_one("#code-digits", Static)
+        except Exception:
+            self._code_digits = None
+        try:
+            self._code_item_label = self.query_one("#code-item-label", Static)
+        except Exception:
+            self._code_item_label = None
         now = time.time()
         self._initial_step = int(now) // 30
         self._is_expired = False
@@ -1714,6 +921,34 @@ class CodeDisplayModal(ModalScreen[None]):
                 except Exception:
                     pass
 
+    def dismiss(self, result: Any = None) -> None:
+        """Zeroize credentials and wipe rendered digits prior to dismissal."""
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+        self.refresh_callback = None
+        self.code = ""
+        self.item_label = ""
+        try:
+            self.query_one("#code-digits", Static).update("")
+        except Exception:
+            pass
+        try:
+            self.query_one("#code-item-label", Static).update("")
+        except Exception:
+            pass
+        if getattr(self, "_code_digits", None) is not None:
+            try:
+                self._code_digits.update("")
+            except Exception:
+                pass
+        if getattr(self, "_code_item_label", None) is not None:
+            try:
+                self._code_item_label.update("")
+            except Exception:
+                pass
+        super().dismiss(result)
+
     def on_unmount(self) -> None:
         """Strict cryptographic memory hygiene."""
         if self._timer is not None:
@@ -1721,13 +956,27 @@ class CodeDisplayModal(ModalScreen[None]):
             self._timer = None
         self.refresh_callback = None
         self.code = ""
+        self.item_label = ""
+        if getattr(self, "_code_digits", None) is not None:
+            try:
+                self._code_digits.update("")
+            except Exception:
+                pass
+        if getattr(self, "_code_item_label", None) is not None:
+            try:
+                self._code_item_label.update("")
+            except Exception:
+                pass
+        try:
+            self.query_one("#code-digits", Static).update("")
+        except Exception:
+            pass
+        try:
+            self.query_one("#code-item-label", Static).update("")
+        except Exception:
+            pass
 
     def action_dismiss_code(self) -> None:
-        if self._timer is not None:
-            self._timer.stop()
-            self._timer = None
-        self.refresh_callback = None
-        self.code = ""
         self.dismiss(None)
 
     def action_copy_code_action(self) -> None:
@@ -2058,6 +1307,84 @@ class TokenOptionList(OptionList):
     ]
 
 
+class CompiledQuery:
+    """Pre-normalized query parameters to avoid redundant operations in highlight loops."""
+
+    __slots__ = ("raw", "q_norm", "words", "has_words", "chars", "c_len")
+
+    def __init__(self, query: str) -> None:
+        self.raw = query.strip()
+        self.q_norm = self.raw.casefold()
+        self.words = [w for w in self.q_norm.split() if w]
+        self.has_words = len(self.words) > 1
+        self.chars = [c for c in self.q_norm if not c.isspace()]
+        self.c_len = len(self.chars)
+
+
+def fast_highlight_match(
+    text: str,
+    cq: CompiledQuery,
+    base_style: str,
+    highlight_style: str = "bold yellow underline",
+) -> Text:
+    """Highlight matching substrings using pre-compiled query bounds."""
+    t = Text(text, style=base_style)
+    if not cq.raw or not text:
+        return t
+
+    raw = text.casefold()
+
+    # Strategy 1: Contiguous substring match
+    if cq.q_norm:
+        sub = raw.find(cq.q_norm)
+        if sub != -1:
+            start = 0
+            step = len(cq.q_norm)
+            while True:
+                idx = raw.find(cq.q_norm, start)
+                if idx == -1:
+                    break
+                t.stylize(highlight_style, idx, idx + step)
+                start = idx + step
+            return t
+
+    # Strategy 2: Multi-word query
+    if cq.has_words:
+        matched = False
+        for w in cq.words:
+            start = 0
+            step = len(w)
+            while True:
+                idx = raw.find(w, start)
+                if idx == -1:
+                    break
+                t.stylize(highlight_style, idx, idx + step)
+                matched = True
+                start = idx + step
+        if matched:
+            return t
+
+    # Strategy 3: Fuzzy subsequence matching
+    if not cq.chars:
+        return t
+
+    matched_indices: list[int] = []
+    c_idx = 0
+    c_len = cq.c_len
+    for i, ch in enumerate(raw):
+        if ch == cq.chars[c_idx]:
+            matched_indices.append(i)
+            c_idx += 1
+            if c_idx == c_len:
+                break
+
+    if c_idx == c_len:
+        for idx in matched_indices:
+            t.stylize(highlight_style, idx, idx + 1)
+
+    return t
+
+
 class TokenBrowserScreen(Screen):
     """Interactive Token Browser screen supporting Action 4 & Action 5."""
 
@@ -2099,6 +1426,15 @@ class TokenBrowserScreen(Screen):
         self.search_index = SearchIndex(self.raw_records)
         self._current_matches: list[tuple[str, str]] = list(self.raw_records)
         self._debounce_timer = None
+        self._last_rendered_query: str | None = None
+
+        # Pre-parse token parts once at initialization
+        self._parsed_catalog: dict[str, tuple[str, str, str]] = {
+            key: parse_token_parts(self.backend, key, label) for key, label in self.raw_records
+        }
+
+        # Pre-build base options for empty query
+        self._cached_base_options: list[Option] = self._build_base_options()
 
     def compose(self) -> ComposeResult:
         with Vertical(id="browser-header"):
@@ -2130,6 +1466,23 @@ class TokenBrowserScreen(Screen):
         self._populate_options(self.raw_records, query="")
         list_widget = self.query_one(TokenOptionList)
         list_widget.focus()
+
+    def _build_base_options(self) -> list[Option]:
+        """Pre-render base options without query highlights for instantaneous clearing."""
+        options: list[Option] = []
+        for idx, (key, label) in enumerate(self.raw_records[:MAX_RENDER_OPTIONS]):
+            srv, acc, short_id = self._parsed_catalog.get(
+                key, parse_token_parts(self.backend, key, label)
+            )
+            row = Text()
+            row.append(f"{idx + 1:<5}", style="dim")
+            row.append(f"{srv:<32}"[:32], style="bold cyan")
+            row.append(" ")
+            row.append(f"{acc:<30}"[:30], style="white")
+            row.append(" ")
+            row.append(f"{short_id:<10}"[:10], style="dim")
+            options.append(Option(prompt=row, id=f"opt-{idx}"))
+        return options
 
     def _get_folder_records(self) -> list[tuple[str, str]]:
         if not self.active_folder:
@@ -2179,37 +1532,51 @@ class TokenBrowserScreen(Screen):
         else:
             badge.update(f"{match_count} matches / {total} items")
 
-        option_list.clear_options()
-
         if match_count == 0:
+            option_list.clear_options()
             empty_notice.display = True
             option_list.display = False
             self._update_status(None)
+            self._last_rendered_query = query
             return
 
         empty_notice.display = False
         option_list.display = True
 
+        # Fast path: Empty query with no active folder uses pre-rendered base options
+        if not query.strip() and self.active_folder is None and self._cached_base_options:
+            option_list.set_options(self._cached_base_options)
+            if option_list.option_count > 0:
+                option_list.highlighted = 0
+                self._update_status(matches[0])
+            self._last_rendered_query = query
+            return
+
+        cq = CompiledQuery(query)
         options_to_render = matches[:MAX_RENDER_OPTIONS]
         rendered_options: list[Option] = []
 
         for idx, (key, label) in enumerate(options_to_render):
-            srv, acc, short_id = parse_token_parts(self.backend, key, label)
+            srv, acc, short_id = self._parsed_catalog.get(
+                key, parse_token_parts(self.backend, key, label)
+            )
 
             row = Text()
             row.append(f"{idx + 1:<5}", style="dim")
-            row.append_text(self._highlight_match(f"{srv:<32}"[:32], query, "bold cyan"))
+            row.append_text(fast_highlight_match(f"{srv:<32}"[:32], cq, "bold cyan"))
             row.append(" ")
-            row.append_text(self._highlight_match(f"{acc:<30}"[:30], query, "white"))
+            row.append_text(fast_highlight_match(f"{acc:<30}"[:30], cq, "white"))
             row.append(" ")
             row.append(f"{short_id:<10}"[:10], style="dim")
 
             rendered_options.append(Option(prompt=row, id=f"opt-{idx}"))
 
-        option_list.add_options(rendered_options)
+        option_list.set_options(rendered_options)
         if option_list.option_count > 0:
             option_list.highlighted = 0
             self._update_status(options_to_render[0])
+
+        self._last_rendered_query = query
 
     @staticmethod
     def _highlight_match(
@@ -2219,63 +1586,8 @@ class TokenBrowserScreen(Screen):
         highlight_style: str = "bold yellow underline",
     ) -> Text:
         """Highlight matching substrings or fuzzy character positions using Rich Text spans."""
-        t = Text(text, style=base_style)
-        q = query.strip()
-        if not q or not text:
-            return t
-
-        raw = text.casefold()
-        q_norm = q.casefold()
-
-        # Strategy 1: Full-query contiguous substring match (all occurrences)
-        sub = raw.find(q_norm)
-        if sub != -1:
-            start = 0
-            while True:
-                idx = raw.find(q_norm, start)
-                if idx == -1:
-                    break
-                t.stylize(highlight_style, idx, idx + len(q_norm))
-                start = idx + len(q_norm)
-            return t
-
-        # Strategy 2: Multi-word query (highlight matching terms)
-        words = [w for w in q_norm.split() if w]
-        if len(words) > 1:
-            matched_word = False
-            for w in words:
-                start = 0
-                while True:
-                    idx = raw.find(w, start)
-                    if idx == -1:
-                        break
-                    t.stylize(highlight_style, idx, idx + len(w))
-                    matched_word = True
-                    start = idx + len(w)
-            if matched_word:
-                return t
-
-        # Strategy 3: Fuzzy subsequence matching (ordered characters)
-        chars = [c for c in q_norm if not c.isspace()]
-        if not chars:
-            return t
-
-        matched_indices: list[int] = []
-        c_idx = 0
-        c_len = len(chars)
-
-        for i, ch in enumerate(raw):
-            if ch == chars[c_idx]:
-                matched_indices.append(i)
-                c_idx += 1
-                if c_idx == c_len:
-                    break
-
-        if c_idx == c_len:
-            for idx in matched_indices:
-                t.stylize(highlight_style, idx, idx + 1)
-
-        return t
+        cq = CompiledQuery(query)
+        return fast_highlight_match(text, cq, base_style, highlight_style)
 
     def _update_status(self, selected_item: tuple[str, str] | None) -> None:
         status = self.query_one("#status-detail", Static)
@@ -2292,6 +1604,10 @@ class TokenBrowserScreen(Screen):
     def on_search_changed(self, event: Input.Changed) -> None:
         if self._debounce_timer is not None:
             self._debounce_timer.stop()
+            self._debounce_timer = None
+        if not event.value:
+            self._apply_search("")
+            return
         self._debounce_timer = self.set_timer(0.035, lambda: self._apply_search(event.value))
 
     @on(Input.Submitted, "#search-input")
@@ -2491,6 +1807,8 @@ class TokenBrowserScreen(Screen):
                         self.raw_records = [
                             (k, rec_label) for k, rec_label in self.raw_records if k != key
                         ]
+                        self._parsed_catalog.pop(key, None)
+                        self._cached_base_options = self._build_base_options()
                         from .tui_items import SearchIndex
 
                         self.search_index = SearchIndex(self.raw_records)
@@ -2513,6 +1831,11 @@ class TokenBrowserScreen(Screen):
             reloaded = await self.app.aload_records(self.backend, self.profile)
             if reloaded is not None:
                 self.raw_records = list(reloaded)
+                self._parsed_catalog = {
+                    key: parse_token_parts(self.backend, key, label)
+                    for key, label in self.raw_records
+                }
+                self._cached_base_options = self._build_base_options()
                 from .tui_items import SearchIndex
 
                 self.search_index = SearchIndex(self.raw_records)
@@ -3094,6 +2417,18 @@ class InteractiveQrModal(ModalScreen[None]):
         super().__init__(**kwargs)
         self.qr_text = qr_text
         self.item_label = item_label
+        self._qr_content: Static | None = None
+        self._qr_item_label: Static | None = None
+
+    def on_mount(self) -> None:
+        try:
+            self._qr_content = self.query_one("#qr-content", Static)
+        except Exception:
+            self._qr_content = None
+        try:
+            self._qr_item_label = self.query_one("#qr-item-label", Static)
+        except Exception:
+            self._qr_item_label = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="qr-dialog"):
@@ -3108,6 +2443,53 @@ class InteractiveQrModal(ModalScreen[None]):
             )
             with Horizontal(id="qr-button-bar"):
                 yield Button("Close [Esc/Enter/q]", id="btn-close-qr", variant="primary")
+
+    def dismiss(self, result: Any = None) -> None:
+        """Zeroize QR text, item labels, and rendered widget contents prior to dismissal."""
+        self.qr_text = ""
+        self.item_label = ""
+        try:
+            self.query_one("#qr-content", Static).update("")
+        except Exception:
+            pass
+        try:
+            self.query_one("#qr-item-label", Static).update("")
+        except Exception:
+            pass
+        if getattr(self, "_qr_content", None) is not None:
+            try:
+                self._qr_content.update("")
+            except Exception:
+                pass
+        if getattr(self, "_qr_item_label", None) is not None:
+            try:
+                self._qr_item_label.update("")
+            except Exception:
+                pass
+        super().dismiss(result)
+
+    def on_unmount(self) -> None:
+        """Strict cryptographic memory hygiene: wipe rendered QR code text and DOM widget."""
+        self.qr_text = ""
+        self.item_label = ""
+        if getattr(self, "_qr_content", None) is not None:
+            try:
+                self._qr_content.update("")
+            except Exception:
+                pass
+        if getattr(self, "_qr_item_label", None) is not None:
+            try:
+                self._qr_item_label.update("")
+            except Exception:
+                pass
+        try:
+            self.query_one("#qr-content", Static).update("")
+        except Exception:
+            pass
+        try:
+            self.query_one("#qr-item-label", Static).update("")
+        except Exception:
+            pass
 
     def action_dismiss_modal(self) -> None:
         self.dismiss(None)
@@ -3266,6 +2648,9 @@ class AddOtpModal(ModalScreen[None]):
         self._parsed_params = None
         self._live_code: str = ""
         self._timer = None
+        self._inp_secret: Input | None = None
+        self._lbl_live_code: Static | None = None
+        self._inp_qr_file_path: Input | None = None
 
     def compose(self) -> ComposeResult:
         with Vertical(id="add-otp-dialog"):
@@ -3370,14 +2755,89 @@ class AddOtpModal(ModalScreen[None]):
     def on_mount(self) -> None:
         self._timer = self.set_interval(1.0, self._tick_totp)
         try:
+            self._inp_secret = self.query_one("#inp-otp-secret", Input)
+        except Exception:
+            self._inp_secret = None
+        try:
+            self._lbl_live_code = self.query_one("#lbl-live-code", Static)
+        except Exception:
+            self._lbl_live_code = None
+        try:
+            self._inp_qr_file_path = self.query_one("#inp-qr-file-path", Input)
+        except Exception:
+            self._inp_qr_file_path = None
+        try:
             self.query_one("#inp-otp-secret", Input).focus()
         except Exception:
             pass
+
+    def dismiss(self, result: Any = None) -> None:
+        """Zeroize secret inputs, live codes, and parsed parameters prior to dismissal."""
+        if self._timer is not None:
+            self._timer.stop()
+            self._timer = None
+        try:
+            self.query_one("#inp-otp-secret", Input).value = ""
+        except Exception:
+            pass
+        try:
+            self.query_one("#lbl-live-code", Static).update("")
+        except Exception:
+            pass
+        try:
+            self.query_one("#inp-qr-file-path", Input).value = ""
+        except Exception:
+            pass
+        if getattr(self, "_inp_secret", None) is not None:
+            try:
+                self._inp_secret.value = ""
+            except Exception:
+                pass
+        if getattr(self, "_lbl_live_code", None) is not None:
+            try:
+                self._lbl_live_code.update("")
+            except Exception:
+                pass
+        if getattr(self, "_inp_qr_file_path", None) is not None:
+            try:
+                self._inp_qr_file_path.value = ""
+            except Exception:
+                pass
+        self._parsed_params = None
+        self._live_code = ""
+        super().dismiss(result)
 
     def on_unmount(self) -> None:
         if self._timer is not None:
             self._timer.stop()
             self._timer = None
+        if getattr(self, "_inp_secret", None) is not None:
+            try:
+                self._inp_secret.value = ""
+            except Exception:
+                pass
+        if getattr(self, "_lbl_live_code", None) is not None:
+            try:
+                self._lbl_live_code.update("")
+            except Exception:
+                pass
+        if getattr(self, "_inp_qr_file_path", None) is not None:
+            try:
+                self._inp_qr_file_path.value = ""
+            except Exception:
+                pass
+        try:
+            self.query_one("#inp-otp-secret", Input).value = ""
+        except Exception:
+            pass
+        try:
+            self.query_one("#lbl-live-code", Static).update("")
+        except Exception:
+            pass
+        try:
+            self.query_one("#inp-qr-file-path", Input).value = ""
+        except Exception:
+            pass
         self._parsed_params = None
         self._live_code = ""
 

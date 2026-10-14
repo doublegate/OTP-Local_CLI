@@ -1,16 +1,23 @@
-"""POSIX shared-memory circular ring buffer with atomic spinlock synchronization."""
+"""POSIX shared-memory circular ring buffer with atomic spinlock and seqlock synchronization."""
 
 import hashlib
 import os
 import struct
+import threading
 import time
 from multiprocessing import shared_memory
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:
+    fcntl = None  # Non-POSIX fallback
 
 SHM_SIZE = 65536  # 64 KiB
 HEADER_SIZE = 64
 SLOT_SIZE = 64
 SLOT_COUNT = 1023
+MAX_PROBE = 16
 MAGIC = b"OTPS"
 VERSION = 1
 
@@ -45,6 +52,7 @@ class ShmRingBuffer:
         self.size = size
         self.create = create
         self._shm: shared_memory.SharedMemory | None = None
+        self._instance_lock = threading.Lock()
 
         if create:
             # Unlink any existing stale segment with the same name
@@ -78,7 +86,7 @@ class ShmRingBuffer:
             VERSION,
             0,  # spinlock = 0 (unlocked)
             SLOT_COUNT,
-            0,  # sequence = 0
+            0,  # sequence = 0 (even)
             0,  # active_count = 0
             b"\x00" * 32,
         )
@@ -91,22 +99,66 @@ class ShmRingBuffer:
             raise ValueError(f"Corrupted or incompatible shared memory header: magic={magic}")
 
     def acquire_lock(self, timeout: float = 0.5) -> bool:
-        """Acquire atomic spinlock with bounded exponential backoff."""
+        """Acquire atomic lock with bounded exponential backoff across processes and threads."""
         start = time.perf_counter()
+        if not self._instance_lock.acquire(timeout=timeout):
+            return False
+
+        remaining = timeout - (time.perf_counter() - start)
+        if remaining <= 0:
+            self._instance_lock.release()
+            return False
+
+        fd = getattr(self._shm, "_fd", None) if self._shm else None
+        backoff = 0.00005
+        max_backoff = 0.002
+
         while True:
-            # Check current lock state
-            locked = struct.unpack_from(">I", self.buf, 8)[0]
-            if locked == 0:
-                # Set lock
-                struct.pack_into(">I", self.buf, 8, 1)
+            locked = False
+            if fcntl is not None and fd is not None and fd >= 0:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    locked = True
+                except BlockingIOError, OSError:
+                    locked = False
+            else:
+                cur = struct.unpack_from(">I", self.buf, 8)[0]
+                if cur == 0:
+                    locked = True
+
+            if locked:
+                try:
+                    struct.pack_into(">I", self.buf, 8, 1)
+                except Exception:
+                    pass
                 return True
-            if time.perf_counter() - start > timeout:
+
+            if time.perf_counter() - start >= timeout:
+                self._instance_lock.release()
                 return False
-            time.sleep(0.0001)
+
+            time.sleep(backoff)
+            backoff = min(backoff * 1.5, max_backoff)
 
     def release_lock(self) -> None:
-        """Release atomic spinlock."""
-        struct.pack_into(">I", self.buf, 8, 0)
+        """Release atomic lock."""
+        try:
+            struct.pack_into(">I", self.buf, 8, 0)
+        except Exception:
+            pass
+
+        fd = getattr(self._shm, "_fd", None) if self._shm else None
+        if fcntl is not None and fd is not None and fd >= 0:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+
+        if self._instance_lock.locked():
+            try:
+                self._instance_lock.release()
+            except RuntimeError:
+                pass
 
     def write_slot(
         self,
@@ -124,10 +176,47 @@ class ShmRingBuffer:
 
         try:
             h = _account_hash(account)
-            slot_idx = h % SLOT_COUNT
+            base_idx = h % SLOT_COUNT
+
+            # Collision probing (linear probing up to MAX_PROBE)
+            target_idx = None
+            first_empty_idx = None
+            oldest_expired_idx = None
+            oldest_expiry = float("inf")
+            now = time.time()
+
+            for probe in range(MAX_PROBE):
+                idx = (base_idx + probe) % SLOT_COUNT
+                offset = HEADER_SIZE + idx * SLOT_SIZE
+                slot_h, _, s_valid = struct.unpack_from(">Qdd", self.buf, offset)
+                if slot_h == h:
+                    target_idx = idx
+                    break
+                if slot_h == 0 and first_empty_idx is None:
+                    first_empty_idx = idx
+                elif s_valid < now and s_valid < oldest_expiry:
+                    oldest_expired_idx = idx
+                    oldest_expiry = s_valid
+
+            is_new_slot = False
+            if target_idx is not None:
+                slot_idx = target_idx
+            elif first_empty_idx is not None:
+                slot_idx = first_empty_idx
+                is_new_slot = True
+            elif oldest_expired_idx is not None:
+                slot_idx = oldest_expired_idx
+            else:
+                slot_idx = base_idx
+
             slot_offset = HEADER_SIZE + slot_idx * SLOT_SIZE
 
-            # Encode code into 8 bytes (null-padded)
+            # Seqlock Protocol: Step 1 - Make sequence ODD before write
+            seq = struct.unpack_from(">Q", self.buf, 16)[0]
+            seq_odd = seq + 1 if (seq % 2 == 0) else seq + 2
+            struct.pack_into(">Q", self.buf, 16, seq_odd)
+
+            # Step 2: Write slot buffer data
             code_bytes = code.encode("ascii", errors="replace")[:8].ljust(8, b"\x00")
             label_bytes = account.encode("utf-8", errors="replace")[:16].ljust(16, b"\x00")
 
@@ -144,10 +233,14 @@ class ShmRingBuffer:
             )
             self.buf[slot_offset : slot_offset + SLOT_SIZE] = slot_data
 
-            # Increment sequence counter and active count
-            _, _, _, _, seq, count, _ = struct.unpack_from(HEADER_FMT, self.buf, 0)
-            struct.pack_into(">Q", self.buf, 16, seq + 1)
-            struct.pack_into(">Q", self.buf, 24, count + 1)
+            # Step 3: Increment active count only on newly claimed slots
+            if is_new_slot:
+                count = struct.unpack_from(">Q", self.buf, 24)[0]
+                struct.pack_into(">Q", self.buf, 24, min(count + 1, SLOT_COUNT))
+
+            # Seqlock Protocol: Step 4 - Make sequence EVEN after write
+            seq_even = seq_odd + 1
+            struct.pack_into(">Q", self.buf, 16, seq_even)
             return True
         finally:
             self.release_lock()
@@ -155,35 +248,68 @@ class ShmRingBuffer:
     def read_slot(self, account: str) -> dict[str, Any] | None:
         """Perform zero-copy atomic read of active token for account (<0.1ms latency)."""
         h = _account_hash(account)
-        slot_idx = h % SLOT_COUNT
-        slot_offset = HEADER_SIZE + slot_idx * SLOT_SIZE
+        base_idx = h % SLOT_COUNT
 
-        # Check sequence before reading
-        seq1 = struct.unpack_from(">Q", self.buf, 16)[0]
-        slot_h, expiry, valid_until, code_bytes, epoch, digits, period, _ = struct.unpack_from(
-            SLOT_FMT, self.buf, slot_offset
-        )
-        seq2 = struct.unpack_from(">Q", self.buf, 16)[0]
+        for _ in range(3):  # Retry up to 3 times on seqlock collision
+            # Seqlock Check: Sequence MUST be even before reading
+            seq1 = struct.unpack_from(">Q", self.buf, 16)[0]
+            if seq1 % 2 != 0:
+                time.sleep(0.00005)
+                continue
 
-        # Verify integrity and matching hash
-        if seq1 != seq2 or slot_h != h:
-            return None
+            for probe in range(MAX_PROBE):
+                slot_idx = (base_idx + probe) % SLOT_COUNT
+                slot_offset = HEADER_SIZE + slot_idx * SLOT_SIZE
 
-        now = time.time()
-        if now > valid_until:
-            return None
+                slot_h = struct.unpack_from(">Q", self.buf, slot_offset)[0]
+                if slot_h == 0:
+                    return None  # Unoccupied slot, account definitely not present
 
-        clean_code = code_bytes.rstrip(b"\x00").decode("ascii", errors="replace")
-        return {
-            "account": account,
-            "code": clean_code,
-            "expiry": expiry,
-            "valid_until": valid_until,
-            "remaining_seconds": max(0.0, valid_until - now),
-            "epoch": epoch,
-            "digits": digits,
-            "period": period,
-        }
+                if slot_h == h:
+                    (
+                        _,
+                        expiry,
+                        valid_until,
+                        code_bytes,
+                        epoch,
+                        digits,
+                        period,
+                        _,
+                    ) = struct.unpack_from(SLOT_FMT, self.buf, slot_offset)
+
+                    # Seqlock Check: Sequence MUST match seq1 and be even after reading
+                    seq2 = struct.unpack_from(">Q", self.buf, 16)[0]
+                    if seq1 != seq2 or seq2 % 2 != 0:
+                        break  # Write occurred during read, retry outer loop
+
+                    now = time.time()
+                    if now > valid_until:
+                        return None
+
+                    clean_code = code_bytes.rstrip(b"\x00").decode("ascii", errors="replace")
+                    return {
+                        "account": account,
+                        "code": clean_code,
+                        "expiry": expiry,
+                        "valid_until": valid_until,
+                        "remaining_seconds": max(0.0, valid_until - now),
+                        "epoch": epoch,
+                        "digits": digits,
+                        "period": period,
+                    }
+            time.sleep(0.00005)
+
+        return None
+
+    @property
+    def sequence(self) -> int:
+        """Return current seqlock sequence counter."""
+        return struct.unpack_from(">Q", self.buf, 16)[0]
+
+    @property
+    def active_count(self) -> int:
+        """Return current active slot count."""
+        return struct.unpack_from(">Q", self.buf, 24)[0]
 
     def close(self) -> None:
         """Close local shared memory mapping."""

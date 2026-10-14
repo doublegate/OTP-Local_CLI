@@ -44,6 +44,7 @@ static void secure_zero(void *v, size_t n) {
     while (n--) {
         *p++ = 0;
     }
+    __asm__ __volatile__("" : : "r"(v) : "memory");
 }
 
 static void parse_options(int argc, const char **argv, struct module_options *opts) {
@@ -138,6 +139,50 @@ static int prompt_code(pam_handle_t *pamh, const struct module_options *opts, ch
     return PAM_SUCCESS;
 }
 
+static int json_escape_string(const char *src, char *dst, size_t dst_len) {
+    if (!src || !dst || dst_len == 0) {
+        return -1;
+    }
+    size_t di = 0;
+    for (size_t si = 0; src[si] != '\0'; ++si) {
+        unsigned char c = (unsigned char)src[si];
+        const char *esc = NULL;
+        char buf[8];
+
+        if (c == '"') {
+            esc = "\\\"";
+        } else if (c == '\\') {
+            esc = "\\\\";
+        } else if (c == '\b') {
+            esc = "\\b";
+        } else if (c == '\f') {
+            esc = "\\f";
+        } else if (c == '\n') {
+            esc = "\\n";
+        } else if (c == '\r') {
+            esc = "\\r";
+        } else if (c == '\t') {
+            esc = "\\t";
+        } else if (c < 0x20) {
+            snprintf(buf, sizeof(buf), "\\u%04x", c);
+            esc = buf;
+        } else {
+            buf[0] = (char)c;
+            buf[1] = '\0';
+            esc = buf;
+        }
+
+        size_t esc_len = strlen(esc);
+        if (di + esc_len >= dst_len) {
+            return -1;
+        }
+        memcpy(dst + di, esc, esc_len);
+        di += esc_len;
+    }
+    dst[di] = '\0';
+    return 0;
+}
+
 static int verify_with_daemon(const char *sock_path, const char *account, const char *code, int debug) {
     size_t path_len = strlen(sock_path);
     if (path_len == 0 || path_len >= sizeof(((struct sockaddr_un *)0)->sun_path)) {
@@ -174,12 +219,28 @@ static int verify_with_daemon(const char *sock_path, const char *account, const 
         return PAM_AUTHINFO_UNAVAIL;
     }
 
-    char req[512];
+    char esc_account[256];
+    char esc_code[128];
+    if (json_escape_string(account, esc_account, sizeof(esc_account)) != 0 ||
+        json_escape_string(code, esc_code, sizeof(esc_code)) != 0) {
+        if (debug) {
+            syslog(LOG_AUTH | LOG_DEBUG, "pam_otp_local: failed to JSON-escape account or code");
+        }
+        secure_zero(esc_code, sizeof(esc_code));
+        close(fd);
+        return PAM_AUTH_ERR;
+    }
+
+    char req[1024];
     int req_len = snprintf(req, sizeof(req),
         "{\"action\":\"verify_totp\",\"account\":\"%s\",\"code\":\"%s\",\"format\":\"json\"}",
-        account, code);
+        esc_account, esc_code);
+    secure_zero(esc_code, sizeof(esc_code));
 
     if (req_len < 0 || (size_t)req_len >= sizeof(req)) {
+        if (debug) {
+            syslog(LOG_AUTH | LOG_DEBUG, "pam_otp_local: request buffer overflow");
+        }
         close(fd);
         return PAM_AUTH_ERR;
     }

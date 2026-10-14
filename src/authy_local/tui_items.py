@@ -253,6 +253,8 @@ class SearchIndex:
             else:
                 words.append(t)
 
+        has_modifiers = bool(filter_modifiers)
+
         def matches_modifiers(norm: str) -> bool:
             for k, v in filter_modifiers.items():
                 if k in ("type",):
@@ -270,7 +272,9 @@ class SearchIndex:
 
         if not words:
             return [
-                (key, label) for key, label, norm, _, _ in self._entries if matches_modifiers(norm)
+                (key, label)
+                for key, label, norm, _, _ in self._entries
+                if not has_modifiers or matches_modifiers(norm)
             ]
 
         scored: list[tuple[int, int, str, str]] = []
@@ -278,7 +282,7 @@ class SearchIndex:
         if len(words) > 1:
             q_chars = frozenset("".join(words))
             for idx, (key, label, norm, char_set, n_len) in enumerate(self._entries):
-                if not matches_modifiers(norm):
+                if has_modifiers and not matches_modifiers(norm):
                     continue
                 if not (q_chars <= char_set):
                     continue
@@ -291,11 +295,16 @@ class SearchIndex:
                         bonus = 15_000 if is_boundary else 0
                         term_scores += 20_000 + bonus - (sub_idx * 10)
                     else:
-                        it = iter(norm)
-                        if all(c in it for c in w):
-                            s_score = _subsequence_score(w, norm, len(w), n_len)
-                            if s_score is not None:
-                                term_scores += s_score
+                        w_len = len(w)
+                        if w_len > 1:
+                            it = iter(norm)
+                            if all(c in it for c in w):
+                                s_score = _subsequence_score(w, norm, w_len, n_len)
+                                if s_score is not None:
+                                    term_scores += s_score
+                                else:
+                                    all_matched = False
+                                    break
                             else:
                                 all_matched = False
                                 break
@@ -309,7 +318,7 @@ class SearchIndex:
             q_len = len(single_word)
             q_set = frozenset(single_word)
             for idx, (key, label, norm, char_set, n_len) in enumerate(self._entries):
-                if not matches_modifiers(norm):
+                if has_modifiers and not matches_modifiers(norm):
                     continue
                 # Fast rejection: if any query character is missing from candidate, skip immediately
                 if not (q_set <= char_set):
@@ -334,12 +343,13 @@ class SearchIndex:
                     scored.append((score, -idx, key, label))
                     continue
 
-                # Tier 4: Subsequence match
-                it = iter(norm)
-                if all(c in it for c in single_word):
-                    sub_score = _subsequence_score(single_word, norm, q_len, n_len)
-                    if sub_score is not None:
-                        scored.append((sub_score, -idx, key, label))
+                # Tier 4: Subsequence match (only applicable when q_len > 1)
+                if q_len > 1:
+                    it = iter(norm)
+                    if all(c in it for c in single_word):
+                        sub_score = _subsequence_score(single_word, norm, q_len, n_len)
+                        if sub_score is not None:
+                            scored.append((sub_score, -idx, key, label))
 
         # Native C tuple sort (score desc, -idx desc) avoiding lambda overhead
         scored.sort(reverse=True)
@@ -389,11 +399,12 @@ def fuzzy_filter(rows: list[tuple[str, str]], query: str) -> list[tuple[str, str
             continue
 
         # Tier 4: Subsequence match
-        it = iter(norm)
-        if all(c in it for c in q):
-            sub_score = _subsequence_score(q, norm, q_len, n_len)
-            if sub_score is not None:
-                scored.append((sub_score, -idx, key, label))
+        if q_len > 1:
+            it = iter(norm)
+            if all(c in it for c in q):
+                sub_score = _subsequence_score(q, norm, q_len, n_len)
+                if sub_score is not None:
+                    scored.append((sub_score, -idx, key, label))
 
     # Native C tuple sort (score desc, -idx desc) avoiding lambda overhead
     scored.sort(reverse=True)

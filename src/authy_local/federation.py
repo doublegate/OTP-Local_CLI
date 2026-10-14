@@ -3,6 +3,7 @@
 import concurrent.futures
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .errors import AppError
 
@@ -10,12 +11,12 @@ BACKEND_BADGES: dict[str, str] = {
     "onepassword": "1P",
     "bitwarden": "BW",
     "keepass": "KP",
-    "pass-otp": "GPG",
-    "totpm": "TPM",
+    "pass-otp": "PASS",
+    "totpm": "TOTP",
     "keychain": "KC",
     "dpapi": "DP",
     "fido2": "FIDO2",
-    "yubikey": "YUBI",
+    "yubikey": "YK",
     "tpm2-totp": "TPM2",
 }
 
@@ -42,8 +43,14 @@ class FederatedToken:
     backends: list[str] = field(default_factory=list)
     badge: str = ""
     display_label: str = ""
+    backend_keys: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        if not self.backend_keys and self.backends:
+            self.backend_keys = {self.backends[0]: self.key}
+        elif self.backend_keys and not self.backends:
+            self.backends = list(self.backend_keys.keys())
+
         if not self.badge and self.backends:
             short_badges = [BACKEND_BADGES.get(b, b.upper()) for b in self.backends]
             self.badge = f"[{'+'.join(short_badges)}]"
@@ -103,6 +110,71 @@ def _fetch_records_for_backend(backend: str, env: dict[str, str]) -> list[tuple[
             records = hardware.tpm2_totp_records(env)
             for item_id, label in records:
                 results.append((backend, item_id, _normalize_title(label)))
+        elif backend == "onepassword":
+            from .backends import onepassword
+            from .interaction import list_items
+            from .tui_profiles import load as load_profiles
+
+            if hasattr(onepassword, "onepassword_records"):
+                records = onepassword.onepassword_records(env)
+            else:
+                home = Path(env["HOME"]) if "HOME" in env else None
+                try:
+                    profiles = load_profiles(home=home)
+                except Exception:
+                    profiles = {}
+                prof = profiles.get("onepassword", {})
+                account = prof.get("account") or env.get("OP_ACCOUNT")
+                vault = prof.get("vault") or env.get("OP_VAULT")
+                tag = prof.get("tag", "OTP")
+                records = list_items(account, vault, env, tag=tag) if account and vault else []
+            for item_id, label in records:
+                results.append((backend, item_id, _normalize_title(label)))
+        elif backend == "pass-otp":
+            from .backends import local
+            from .tui_profiles import load as load_profiles
+
+            if hasattr(local, "pass_otp_records"):
+                records = local.pass_otp_records(env)
+            else:
+                home = Path(env["HOME"]) if "HOME" in env else None
+                try:
+                    profiles = load_profiles(home=home)
+                except Exception:
+                    profiles = {}
+                prof = profiles.get("pass-otp", {})
+                store = prof.get("store") or env.get("PASSWORD_STORE_DIR")
+                key_home = prof.get("key_home") or env.get("GNUPGHOME")
+                records = (
+                    local.records(
+                        local.LocalScope(backend="pass-otp", store=store, key_home=key_home), env
+                    )
+                    if store and key_home
+                    else []
+                )
+            for item_id, label in records:
+                results.append((backend, item_id, _normalize_title(label)))
+        elif backend == "totpm":
+            from .backends import local
+            from .tui_profiles import load as load_profiles
+
+            if hasattr(local, "totpm_records"):
+                records = local.totpm_records(env)
+            else:
+                home = Path(env["HOME"]) if "HOME" in env else None
+                try:
+                    profiles = load_profiles(home=home)
+                except Exception:
+                    profiles = {}
+                prof = profiles.get("totpm", {})
+                config = prof.get("config") or env.get("TOTPM_CONFIG")
+                records = (
+                    local.records(local.LocalScope(backend="totpm", config=config), env)
+                    if config
+                    else []
+                )
+            for item_id, label in records:
+                results.append((backend, item_id, _normalize_title(label)))
     except Exception:
         pass
     return results
@@ -117,16 +189,22 @@ class FederatedResolver:
     def resolve_all(self, env: dict[str, str], timeout: float = 2.0) -> list[FederatedToken]:
         """Query all candidate backends concurrently and merge deduplicated tokens."""
         by_normalized: dict[str, FederatedToken] = {}
+        if not self.candidate_backends:
+            return []
 
-        # Concurrently fetch from all candidate backends
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=min(len(self.candidate_backends), 8)
-        ) as executor:
+        # Concurrently fetch from all candidate backends with non-blocking lifecycle management
+        executor = concurrent.futures.ThreadPoolExecutor(
+            max_workers=max(1, min(len(self.candidate_backends), 8))
+        )
+        try:
             futures = {
                 executor.submit(_fetch_records_for_backend, b, env): b
                 for b in self.candidate_backends
             }
-            done, _ = concurrent.futures.wait(futures.keys(), timeout=timeout)
+            done, not_done = concurrent.futures.wait(futures.keys(), timeout=timeout)
+            for fut in not_done:
+                fut.cancel()
+
             for fut in done:
                 try:
                     recs = fut.result()
@@ -136,14 +214,18 @@ class FederatedResolver:
                             existing = by_normalized[norm]
                             if backend not in existing.backends:
                                 existing.backends.append(backend)
+                            existing.backend_keys[backend] = item_id
                         else:
                             by_normalized[norm] = FederatedToken(
                                 key=item_id,
                                 title=title,
                                 backends=[backend],
+                                backend_keys={backend: item_id},
                             )
                 except Exception:
                     pass
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         # Finalize badges and labels
         tokens: list[FederatedToken] = []
@@ -181,35 +263,101 @@ class FederatedResolver:
             ordered_backends.insert(0, preferred_backend)
 
         for backend in ordered_backends:
+            backend_key = token.backend_keys.get(backend, token.key)
             try:
                 if backend == "bitwarden":
                     from .backends import bitwarden
 
-                    return bitwarden.bitwarden_code(token.key, env, timestamp=timestamp)
+                    return bitwarden.bitwarden_code(backend_key, env, timestamp=timestamp)
                 elif backend == "keepass":
                     from .backends import keepass
 
-                    return keepass.keepass_code(token.key, env, timestamp=timestamp)
+                    return keepass.keepass_code(backend_key, env, timestamp=timestamp)
                 elif backend == "fido2":
                     from .backends import fido2
 
-                    return fido2.fido2_code(token.key, env)
+                    return fido2.fido2_code(backend_key, env)
                 elif backend == "keychain":
                     from .backends import keychain
 
-                    return keychain.keychain_code(token.key, env, timestamp=timestamp)
+                    return keychain.keychain_code(backend_key, env, timestamp=timestamp)
                 elif backend == "dpapi":
                     from .backends import dpapi
 
-                    return dpapi.dpapi_code(token.key, env, timestamp=timestamp)
+                    return dpapi.dpapi_code(backend_key, env, timestamp=timestamp)
                 elif backend == "yubikey":
                     from .backends import hardware
 
-                    return hardware.yubikey_code(token.key, env)
+                    return hardware.yubikey_code(backend_key, env)
                 elif backend == "tpm2-totp":
                     from .backends import hardware
 
-                    return hardware.tpm2_totp_code(token.key, env)
+                    return hardware.tpm2_totp_code(backend_key, env)
+                elif backend == "onepassword":
+                    from .backends import onepassword
+
+                    if hasattr(onepassword, "onepassword_code"):
+                        return onepassword.onepassword_code(backend_key, env, timestamp=timestamp)
+                    from .models import Scope
+                    from .tui_profiles import load as load_profiles
+
+                    home = Path(env["HOME"]) if "HOME" in env else None
+                    try:
+                        profiles = load_profiles(home=home)
+                    except Exception:
+                        profiles = {}
+                    prof = profiles.get("onepassword", {})
+                    account = prof.get("account") or env.get("OP_ACCOUNT")
+                    vault = prof.get("vault") or env.get("OP_VAULT")
+                    if not account or not vault:
+                        raise AppError(2)
+                    scope = Scope(backend_key, account, vault)
+                    return onepassword.retrieve(scope, env)
+                elif backend == "pass-otp":
+                    from .backends import local
+
+                    if hasattr(local, "pass_otp_code"):
+                        return local.pass_otp_code(backend_key, env, timestamp=timestamp)
+                    from .tui_profiles import load as load_profiles
+
+                    home = Path(env["HOME"]) if "HOME" in env else None
+                    try:
+                        profiles = load_profiles(home=home)
+                    except Exception:
+                        profiles = {}
+                    prof = profiles.get("pass-otp", {})
+                    store = prof.get("store") or env.get("PASSWORD_STORE_DIR")
+                    key_home = prof.get("key_home") or env.get("GNUPGHOME")
+                    if not store or not key_home:
+                        raise AppError(2)
+                    scope = local.LocalScope(
+                        backend="pass-otp", store=store, key_home=key_home, entry=backend_key
+                    )
+                    return local.retrieve(scope, env)
+                elif backend == "totpm":
+                    from .backends import local
+
+                    if hasattr(local, "totpm_code"):
+                        return local.totpm_code(backend_key, env, timestamp=timestamp)
+                    from .tui_profiles import load as load_profiles
+
+                    home = Path(env["HOME"]) if "HOME" in env else None
+                    try:
+                        profiles = load_profiles(home=home)
+                    except Exception:
+                        profiles = {}
+                    prof = profiles.get("totpm", {})
+                    config = prof.get("config") or env.get("TOTPM_CONFIG")
+                    if not config:
+                        raise AppError(2)
+                    if ":" in backend_key:
+                        service, account = backend_key.split(":", 1)
+                    else:
+                        service, account = backend_key, backend_key
+                    scope = local.LocalScope(
+                        backend="totpm", config=config, service=service, account=account
+                    )
+                    return local.retrieve(scope, env)
             except Exception:
                 continue
 

@@ -34,7 +34,72 @@ def has_terminal(stdin) -> bool:
 def parser() -> Parser:
     root = Parser(prog="otp-local", allow_abbrev=False)
     root.add_argument("--version", action="version", version=__version__)
-    commands = root.add_subparsers(dest="command", required=True, parser_class=Parser)
+    root.add_argument("--daemon", action="store_true", help="Start background resident daemon")
+    root.add_argument("--status", action="store_true", help="Query resident daemon status")
+    root.add_argument("--stop", action="store_true", help="Stop resident daemon")
+    root.add_argument("--clean", action="store_true", help="Clean stale PID and socket files")
+    root.add_argument("--doctor", action="store_true", help="Run system diagnostics")
+    root.add_argument("--pick", action="store_true", help="Launch interactive token picker")
+
+    commands = root.add_subparsers(dest="command", required=False, parser_class=Parser)
+
+    list_cmd = commands.add_parser(
+        "list", allow_abbrev=False, help="List accounts and tokens non-interactively"
+    )
+    list_cmd.add_argument(
+        "--backend",
+        choices=(
+            "onepassword",
+            "pass-otp",
+            "totpm",
+            "yubikey",
+            "tpm2-totp",
+            "keychain",
+            "dpapi",
+            "fido2",
+            "bitwarden",
+            "keepass",
+            "federated",
+        ),
+        default="federated",
+    )
+    list_cmd.add_argument("--json", action="store_true", help="Output token listing in JSON format")
+    for flag in ("account", "vault", "store", "key-home", "entry", "config", "service"):
+        list_cmd.add_argument("--" + flag)
+
+    search_cmd = commands.add_parser(
+        "search", allow_abbrev=False, help="Search tokens non-interactively"
+    )
+    search_cmd.add_argument("query", help="Search query string")
+    search_cmd.add_argument(
+        "--backend",
+        choices=(
+            "onepassword",
+            "pass-otp",
+            "totpm",
+            "yubikey",
+            "tpm2-totp",
+            "keychain",
+            "dpapi",
+            "fido2",
+            "bitwarden",
+            "keepass",
+            "federated",
+        ),
+        default="federated",
+    )
+    search_cmd.add_argument(
+        "--json", action="store_true", help="Output search results in JSON format"
+    )
+    search_cmd.add_argument(
+        "--code", action="store_true", help="Output current TOTP code for single match"
+    )
+    search_cmd.add_argument(
+        "--copy", action="store_true", help="Copy TOTP code to clipboard for single match"
+    )
+    for flag in ("account", "vault", "store", "key-home", "entry", "config", "service"):
+        search_cmd.add_argument("--" + flag)
+
     inspect = commands.add_parser("doctor", allow_abbrev=False)
     inspect.add_argument("--json", action="store_true")
     inspect.add_argument(
@@ -131,13 +196,27 @@ def parser() -> Parser:
     daemon_cmd = commands.add_parser("daemon", allow_abbrev=False)
     daemon_cmd.add_argument(
         "action",
-        choices=("start", "stop", "status", "reload", "systemd-install", "systemd-unit"),
+        nargs="?",
+        choices=(
+            "start",
+            "stop",
+            "status",
+            "restart",
+            "clean",
+            "reload",
+            "systemd-install",
+            "systemd-unit",
+        ),
     )
+    daemon_cmd.add_argument("--clean", action="store_true", help="Clean stale PID and socket files")
     daemon_cmd.add_argument("--foreground", action="store_true")
     daemon_cmd.add_argument("--timeout", type=float, default=900.0)
     unlock_cmd = commands.add_parser("unlock", allow_abbrev=False)
     unlock_cmd.add_argument("--account")
     return root
+
+
+build_parser = parser
 
 
 def local_scope(args):
@@ -192,12 +271,140 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
+
+    from .security import init_runtime_security
+
+    init_runtime_security()
+
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv:
+        first = argv[0]
+        if first == "--doctor":
+            argv = ["doctor", *argv[1:]]
+        elif first == "--pick":
+            argv = ["pick", *argv[1:]]
+        elif first == "--daemon":
+            argv = ["daemon", "start", *argv[1:]]
+        elif first == "--status":
+            argv = ["daemon", "status", *argv[1:]]
+        elif first == "--stop":
+            argv = ["daemon", "stop", *argv[1:]]
+        elif first == "--clean":
+            argv = ["daemon", "clean", *argv[1:]]
+
     try:
         # argparse help/version use process streams; route them through the public sinks.
         from contextlib import redirect_stderr, redirect_stdout
 
         with redirect_stdout(stdout), redirect_stderr(stderr):
             args = parser().parse_args(argv)
+
+        if args.command is None:
+            if getattr(args, "clean", False):
+                from .daemon import daemon_clean
+
+                return daemon_clean(env=dict(os.environ))
+            elif getattr(args, "status", False):
+                from .daemon import daemon_status
+
+                return daemon_status(env=dict(os.environ))
+            elif getattr(args, "stop", False):
+                from .daemon import daemon_stop
+
+                return daemon_stop(env=dict(os.environ))
+            elif getattr(args, "daemon", False):
+                from .daemon import daemon_start
+
+                return daemon_start(foreground=False, env=dict(os.environ))
+            elif getattr(args, "doctor", False):
+                result = doctor.report(dict(os.environ))
+                for name, capability in result.items():
+                    stdout.write(f"{name}: {capability['state']}\n")
+                return doctor.status(result)
+            elif getattr(args, "pick", False):
+                return main(["pick"], stdin=stdin, stdout=stdout, stderr=stderr)
+            else:
+                raise AppError(2)
+
+        if args.command == "list":
+            from .federation import FederatedResolver
+
+            env = dict(os.environ)
+            backends = [args.backend] if args.backend != "federated" else None
+            resolver = FederatedResolver(candidate_backends=backends)
+            tokens = resolver.resolve_all(env)
+
+            if getattr(args, "json", False):
+                items = [
+                    {
+                        "key": t.key,
+                        "title": t.title,
+                        "badge": t.badge,
+                        "backends": t.backends,
+                        "account": getattr(t, "account", ""),
+                        "issuer": getattr(t, "issuer", ""),
+                    }
+                    for t in tokens
+                ]
+                stdout.write(json.dumps(items, indent=2) + "\n")
+                stdout.flush()
+                return 0
+
+            for t in tokens:
+                stdout.write(f"{t.badge} {t.title}\n")
+            stdout.flush()
+            return 0
+
+        if args.command == "search":
+            from .federation import FederatedResolver
+
+            env = dict(os.environ)
+            backends = [args.backend] if args.backend != "federated" else None
+            resolver = FederatedResolver(candidate_backends=backends)
+            matched = resolver.search(args.query, env)
+
+            if getattr(args, "code", False) or getattr(args, "copy", False):
+                if not matched:
+                    notice(stderr, f"No tokens found matching '{args.query}'.")
+                    return 1
+                if len(matched) > 1:
+                    notice(stderr, f"Ambiguous search query: {len(matched)} tokens matched.")
+                    return 1
+                code = resolver.retrieve_code(matched[0], env)
+                if getattr(args, "copy", False):
+                    copy_code(code, env)
+                    notice(stderr, "Code copied to clipboard.")
+                    return 0
+                stdout.write(code + "\n")
+                stdout.flush()
+                return 0
+
+            if getattr(args, "json", False):
+                items = [
+                    {
+                        "key": t.key,
+                        "title": t.title,
+                        "badge": t.badge,
+                        "backends": t.backends,
+                        "account": getattr(t, "account", ""),
+                        "issuer": getattr(t, "issuer", ""),
+                    }
+                    for t in matched
+                ]
+                stdout.write(json.dumps(items, indent=2) + "\n")
+                stdout.flush()
+                return 0 if matched else 1
+
+            if not matched:
+                notice(stderr, f"No tokens found matching '{args.query}'.")
+                return 1
+
+            for t in matched:
+                stdout.write(f"{t.badge} {t.title}\n")
+            stdout.flush()
+            return 0
+
         if args.command == "doctor":
             if getattr(args, "pam", False):
                 from .pam_check import doctor_pam_cli
@@ -945,7 +1152,9 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             if sys.platform not in ("linux", "darwin", "win32") or sys.version_info[:2] != (3, 14):
                 raise AppError(3)
             from .daemon import (
+                daemon_clean,
                 daemon_reload,
+                daemon_restart,
                 daemon_start,
                 daemon_status,
                 daemon_stop,
@@ -954,7 +1163,11 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             )
 
             env = dict(os.environ)
-            if args.action == "start":
+            if getattr(args, "clean", False) or args.action == "clean":
+                return daemon_clean(env=env)
+            elif args.action == "restart":
+                return daemon_restart(foreground=getattr(args, "foreground", False), env=env)
+            elif args.action == "start":
                 return daemon_start(foreground=getattr(args, "foreground", False), env=env)
             elif args.action == "stop":
                 return daemon_stop(env=env)
@@ -967,6 +1180,8 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
             elif args.action == "systemd-unit":
                 stdout.write(generate_systemd_unit())
                 return 0
+            else:
+                raise AppError(2)
         scope = None
 
         if args.backend == "onepassword":
@@ -1115,3 +1330,10 @@ def main(argv=None, *, stdin=None, stdout=None, stderr=None) -> int:
     except OSError, UnicodeError:
         # No traceback or broken-pipe diagnostic may include external values.
         return 3
+    except Exception:
+        # Top-level shield: intercept unhandled exceptions and emit a static
+        # diagnostic notice to prevent tracebacks from leaking secrets to stderr.
+        from .errors import MESSAGES
+
+        notice(stderr, MESSAGES[5])
+        return 5

@@ -160,6 +160,27 @@ class TestAsyncFederatedResolver(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(res.code), 6)
         self.assertEqual(res.backend, "bitwarden")
 
+    async def test_retrieve_code_fast_return(self):
+        fast_backend = AsyncMockBackend(
+            name="fast_tpm",
+            tokens={"Target": "JBSWY3DPEHPK3PXP"},
+            latency=0.01,
+        )
+        slow_backend = AsyncMockBackend(
+            name="slow_vault",
+            tokens={"Target": "KRSXG5CTMVRXEZLU"},
+            latency=2.0,
+        )
+        resolver = AsyncFederatedResolver(backends=[fast_backend, slow_backend])
+
+        t0 = time.monotonic()
+        res = await resolver.retrieve_code("Target", timeout=5.0)
+        elapsed = time.monotonic() - t0
+
+        self.assertIsNotNone(res)
+        self.assertEqual(res.backend, "fast_tpm")
+        self.assertLess(elapsed, 0.5, f"retrieve_code took {elapsed:.2f}s, did not fast-return")
+
 
 class TestJsonRpcStreamingProtocol(unittest.IsolatedAsyncioTestCase):
     async def test_json_rpc_over_tcp(self):

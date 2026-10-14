@@ -1,6 +1,6 @@
 CC ?= gcc
-CFLAGS ?= -Wall -Wextra -Werror -O2 -fPIC -fstack-protector-strong -D_FORTIFY_SOURCE=2
-LDFLAGS ?= -shared -Wl,-z,relro,-z,now
+CFLAGS ?= -Wall -Wextra -Werror -O2 -fPIC -fstack-protector-strong -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security
+LDFLAGS ?= -shared -Wl,-z,relro,-z,now,-z,noexecstack
 LDLIBS ?= -lpam
 
 DESTDIR ?=

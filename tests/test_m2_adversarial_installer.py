@@ -40,22 +40,41 @@ class TestAdversarialAllowlistValidation(unittest.TestCase):
         """Standard forbidden third-party packages must be rejected with InstallError."""
         with tempfile.TemporaryDirectory() as tmp:
             whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
-            for pkg in ("evil-package", "requests", "urllib3", "textual-evil", "textual_evil"):
+            for pkg in (
+                "evil-package",
+                "requests",
+                "urllib3",
+                "textual-evil",
+                "textual_evil",
+                "fido2-evil",
+                "fido2_evil",
+                "pluggy-evil",
+                "pluggy_evil",
+                "fido",
+                "plug",
+            ):
                 with self.subTest(pkg=pkg):
                     _make_mock_wheel(whl, [pkg])
                     with self.assertRaises(InstallError):
                         _wheel(whl)
 
     def test_multiple_requirements_with_forbidden_package_rejected(self):
-        """Wheels mixing textual with a forbidden package must be rejected."""
+        """Wheels mixing allowed packages with a forbidden package must be rejected."""
         with tempfile.TemporaryDirectory() as tmp:
             whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
-            _make_mock_wheel(whl, ["textual>=0.80.0", "requests"])
-            with self.assertRaises(InstallError):
-                _wheel(whl)
+            for reqs in (
+                ["textual>=0.80.0", "requests"],
+                ["textual>=0.80.0", "fido2>=2.0.0", "pluggy>=1.0.0", "requests"],
+                ["fido2>=2.0.0", "evil-package"],
+                ["pluggy>=1.0.0", "urllib3"],
+            ):
+                with self.subTest(reqs=reqs):
+                    _make_mock_wheel(whl, reqs)
+                    with self.assertRaises(InstallError):
+                        _wheel(whl)
 
-    def test_allowed_exact_textual_and_version_specifications(self):
-        """Exact textual package names and standard version specifiers must pass."""
+    def test_allowed_exact_dependencies_and_version_specifications(self):
+        """Exact allowed package names (textual, fido2, pluggy) and standard version specifiers must pass."""
         with tempfile.TemporaryDirectory() as tmp:
             whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
             for spec in (
@@ -67,6 +86,15 @@ class TestAdversarialAllowlistValidation(unittest.TestCase):
                 ["textual<=9.0.0"],
                 ["textual~=0.80.0"],
                 ["textual>=0.80.0,<1.0.0"],
+                ["fido2"],
+                ["fido2>=2.0.0"],
+                ["fido2==2.2.1"],
+                ["fido2>=2.0.0,<3.0.0"],
+                ["pluggy"],
+                ["pluggy>=1.0.0"],
+                ["pluggy==1.6.0"],
+                ["pluggy>=1.0.0,<2.0.0"],
+                ["textual>=0.80.0", "fido2>=2.0.0", "pluggy>=1.0.0"],
             ):
                 with self.subTest(spec=spec):
                     _make_mock_wheel(whl, spec)
@@ -75,44 +103,88 @@ class TestAdversarialAllowlistValidation(unittest.TestCase):
                     self.assertEqual(len(digest), 64)
 
     def test_forbidden_extra_dev_rejected(self):
-        """Requires-Dist: textual; extra == 'dev' must be rejected (Defect: currently accepted)."""
+        """Requires-Dist with extra == 'dev' must be rejected."""
         with tempfile.TemporaryDirectory() as tmp:
             whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
-            _make_mock_wheel(whl, ['textual; extra == "dev"'])
-            with self.assertRaises(InstallError):
-                _wheel(whl)
+            for req in (
+                'textual; extra == "dev"',
+                'fido2; extra == "dev"',
+                'pluggy; extra == "dev"',
+            ):
+                with self.subTest(req=req):
+                    _make_mock_wheel(whl, [req])
+                    with self.assertRaises(InstallError):
+                        _wheel(whl)
 
     def test_forbidden_extra_space_dev_rejected(self):
-        """Requires-Dist: textual ; extra == 'dev' must be rejected (Defect: currently accepted)."""
+        """Requires-Dist with ' ; extra == dev' must be rejected."""
         with tempfile.TemporaryDirectory() as tmp:
             whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
-            _make_mock_wheel(whl, ['textual ; extra == "dev"'])
-            with self.assertRaises(InstallError):
-                _wheel(whl)
+            for req in (
+                'textual ; extra == "dev"',
+                'fido2 ; extra == "dev"',
+                'pluggy ; extra == "dev"',
+            ):
+                with self.subTest(req=req):
+                    _make_mock_wheel(whl, [req])
+                    with self.assertRaises(InstallError):
+                        _wheel(whl)
 
     def test_forbidden_platform_marker_rejected(self):
-        """Requires-Dist: textual; sys_platform == 'win32' must be rejected."""
+        """Requires-Dist with environment markers must be rejected."""
         with tempfile.TemporaryDirectory() as tmp:
             whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
-            _make_mock_wheel(whl, ['textual; sys_platform == "win32"'])
-            with self.assertRaises(InstallError):
-                _wheel(whl)
+            for req in (
+                'textual; sys_platform == "win32"',
+                'fido2; sys_platform == "linux"',
+                'pluggy; python_version >= "3.14"',
+            ):
+                with self.subTest(req=req):
+                    _make_mock_wheel(whl, [req])
+                    with self.assertRaises(InstallError):
+                        _wheel(whl)
 
     def test_forbidden_whitespace_extra_syntax_rejected(self):
-        """Requires-Dist: textual [syntax] must be rejected (Defect: currently accepted)."""
+        """Requires-Dist with extras syntax [syntax] must be rejected."""
         with tempfile.TemporaryDirectory() as tmp:
             whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
-            _make_mock_wheel(whl, ["textual [syntax]"])
-            with self.assertRaises(InstallError):
-                _wheel(whl)
+            for req in ("textual [syntax]", "fido2 [extra]", "pluggy [testing]"):
+                with self.subTest(req=req):
+                    _make_mock_wheel(whl, [req])
+                    with self.assertRaises(InstallError):
+                        _wheel(whl)
 
     def test_forbidden_direct_url_reference_rejected(self):
-        """Requires-Dist: textual @ https://... must be rejected (Defect: currently accepted)."""
+        """Requires-Dist with @ direct URL must be rejected."""
         with tempfile.TemporaryDirectory() as tmp:
             whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
-            _make_mock_wheel(whl, ["textual @ https://evil.com/wheel.whl"])
-            with self.assertRaises(InstallError):
-                _wheel(whl)
+            for req in (
+                "textual @ https://evil.com/wheel.whl",
+                "fido2 @ https://evil.com/fido2.whl",
+                "pluggy @ https://evil.com/pluggy.whl",
+            ):
+                with self.subTest(req=req):
+                    _make_mock_wheel(whl, [req])
+                    with self.assertRaises(InstallError):
+                        _wheel(whl)
+
+    def test_forbidden_non_ascii_homoglyph_header_rejected(self):
+        """Non-ASCII / Cyrillic homoglyph Requires-Dist headers returning Header objects must fail closed with InstallError."""
+        with tempfile.TemporaryDirectory() as tmp:
+            whl = Path(tmp) / "authy_local-1.0.0-py3-none-any.whl"
+            for req in (
+                "t\u0435xtual",  # Cyrillic small letter ie (\u0435)
+                "t\u0435xtual>=0.80.0",  # Cyrillic homoglyph with version
+                "f\u0456do2",  # Cyrillic small letter byelorussian-ukrainian i (\u0456)
+                "f\u0456do2>=2.0.0",  # Cyrillic homoglyph with version
+                "\u0440luggy",  # Cyrillic small letter er (\u0440)
+                "\u0440luggy>=1.0.0",  # Cyrillic homoglyph with version
+                "textual\uff01",  # Fullwidth exclamation mark (\uff01)
+            ):
+                with self.subTest(req=req):
+                    _make_mock_wheel(whl, [req])
+                    with self.assertRaises(InstallError):
+                        _wheel(whl)
 
 
 class TestAdversarialOfflineWheelhouse(unittest.TestCase):

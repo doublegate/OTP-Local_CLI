@@ -9,7 +9,7 @@ import shutil
 import struct
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit
 
@@ -21,7 +21,7 @@ from .processes import run
 class OtpParameters:
     """Validated parameters for an OTP token."""
 
-    secret: str
+    secret: str = field(repr=False)
     account: str = "account"
     issuer: str = ""
     algorithm: str = "SHA1"

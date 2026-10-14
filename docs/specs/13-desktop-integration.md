@@ -1,16 +1,16 @@
 # Desktop and System Integration Guide
 
-Status: Implemented and verified for CLI and desktop delivery, 2026-10-13.
+Status: Implemented and verified for CLI and desktop delivery, 2026-10-14 (v2.0.1 LTS).
 Extends [CLI Specification](03-cli-specification.md) and [Textual TUI](11-tui.md).
 
 ## 1. Overview
 
-Authy Local integrates into desktop workflows on Linux (Wayland and X11) through:
+Authy Local integrates into desktop workflows on Linux (Wayland and X11), macOS, and Windows through:
 
 1. Freedesktop application entries (`.desktop` files) for application menus and launchers.
-2. Direct systemd user service management for the ephemeral session agent.
+2. Direct systemd user service management for the resident IPC daemon (`otp-local daemon`) and ephemeral session agent (`otp-local agent`).
 3. Global hotkey bindings in modern Wayland compositors (Hyprland, Sway) and window managers.
-4. Native shell auto-completions for `fish`, `bash`, and `zsh`.
+4. Native shell auto-completions for `fish`, `bash`, `zsh`, `PowerShell 7+`, and `NuShell`.
 5. Offline backup export (`otp-local export`) with optional recipient-targeted GPG encryption.
 
 ## 2. Desktop Entries
@@ -63,9 +63,9 @@ bindsym Mod4+o exec otp-local pick
 - Add a new command shortcut triggering `otp-local pick`.
 - Assign preferred key combination (e.g. `Meta + O` or `Ctrl + Alt + O`).
 
-## 4. Systemd User Service
+## 4. Systemd User Service & Daemon Management
 
-The ephemeral session agent daemon (`otp-local agent`) can be managed as a systemd user unit.
+The resident IPC daemon (`otp-local daemon`) and ephemeral session agent (`otp-local agent`) can be managed as systemd user units with strict filesystem sandboxing (`ReadWritePaths=%t %h/.local/state/authy-local`).
 
 ### Service Definition (`share/systemd/user/authy-local-agent.service`)
 
@@ -81,12 +81,13 @@ ExecStart=%h/.local/bin/otp-local agent start --timeout 900
 Restart=on-failure
 RestartSec=3s
 PrivateTmp=true
+ReadWritePaths=%t %h/.local/state/authy-local
 
 [Install]
 WantedBy=default.target
 ```
 
-### Activation
+### Activation & Lifecycle Commands
 
 ```bash
 mkdir -p ~/.config/systemd/user
@@ -95,11 +96,13 @@ systemctl --user daemon-reload
 systemctl --user enable --now authy-local-agent.service
 ```
 
-Verify service status:
+Verify service or resident daemon status:
 
 ```bash
 systemctl --user status authy-local-agent.service
-otp-local agent status
+otp-local daemon status
+otp-local daemon restart
+otp-local daemon clean
 ```
 
 ## 5. Shell Completions

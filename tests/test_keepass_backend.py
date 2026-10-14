@@ -290,6 +290,87 @@ class TestKeePassBackend(unittest.TestCase):
             self.assertEqual(code, 0)
             mock_enroll.assert_called_once_with("Discord", "JBSWY3DPEHPK3PXP", unittest.mock.ANY)
 
+    def test_keepass_list_records_alias(self):
+        self.assertIs(keepass.list_records, keepass.keepass_records)
+
+    @patch("shutil.which", return_value="/usr/bin/keepassxc-cli")
+    @patch("authy_local.backends.keepass.run")
+    def test_keepass_stdin_argument_bugfix_and_caps(self, mock_run, mock_which):
+        dummy_db = Path(self.temp_dir.name) / "test.kdbx"
+        dummy_db.touch()
+        mock_run.return_value = Completed(0, b"123456\n")
+        code = keepass.keepass_code("GitHub", self.env, db_path=dummy_db)
+        self.assertEqual(code, "123456")
+        self.assertIn("input_data", mock_run.call_args[1])
+        self.assertEqual(mock_run.call_args[1]["stdout_cap"], 2048)
+
+        mock_run.return_value = Completed(0, b"GitHub\nAWS\n")
+        recs = keepass.keepass_records(self.env, db_path=dummy_db)
+        self.assertEqual(len(recs), 2)
+        self.assertIn("input_data", mock_run.call_args[1])
+        self.assertEqual(mock_run.call_args[1]["stdout_cap"], 2097152)
+
+    def test_keepass_non_totp_entry_filtering_xml(self):
+        mixed_xml = """<?xml version="1.0" encoding="utf-8"?>
+<KeePassFile>
+  <Root>
+    <Group>
+      <Entry>
+        <String><Key>Title</Key><Value>ValidOTP</Value></String>
+        <String><Key>UserName</Key><Value>user1</Value></String>
+        <String><Key>otp</Key><Value>otpauth://totp/ValidOTP?secret=JBSWY3DPEHPK3PXP</Value></String>
+      </Entry>
+      <Entry>
+        <String><Key>Title</Key><Value>CustomSeedOTP</Value></String>
+        <String><Key>UserName</Key><Value>user2</Value></String>
+        <String><Key>TOTP Seed</Key><Value>JBSWY3DPEHPK3PXP</Value></String>
+      </Entry>
+      <Entry>
+        <String><Key>Title</Key><Value>PasswordOnly</Value></String>
+        <String><Key>UserName</Key><Value>user3</Value></String>
+        <String><Key>Password</Key><Value>SecretPass123</Value></String>
+      </Entry>
+      <Entry>
+        <String><Key>Title</Key><Value>SecureNote</Value></String>
+        <String><Key>Notes</Key><Value>This is a secret note without any OTP.</Value></String>
+      </Entry>
+    </Group>
+  </Root>
+</KeePassFile>"""
+        env = dict(self.env)
+        env["FAKE_KEEPASS_XML"] = mixed_xml
+        recs = keepass.keepass_records(env)
+        titles = [r[0] for r in recs]
+        self.assertEqual(titles, ["CustomSeedOTP", "ValidOTP"])
+
+    @patch("shutil.which", return_value="/usr/bin/keepassxc-cli")
+    @patch("authy_local.backends.keepass.run")
+    def test_keepass_non_totp_entry_filtering_cli_group_and_folder_pruning(
+        self, mock_run, mock_which
+    ):
+        dummy_db = Path(self.temp_dir.name) / "test.kdbx"
+        dummy_db.touch()
+
+        def fake_run(cmd, **kwargs):
+            if "export" in cmd:
+                return Completed(1, b"Error")
+            if "ls" in cmd:
+                return Completed(
+                    0,
+                    b"Root/\nRoot/General/\nRoot/General/Server1\nRoot/Social/\nRoot/Social/Twitter/\nRoot/Social/Twitter/Account1\n",
+                )
+            return Completed(1, b"")
+
+        mock_run.side_effect = fake_run
+        recs = keepass.keepass_records(self.env, db_path=dummy_db)
+        labels = [r[0] for r in recs]
+        self.assertNotIn("Root", labels)
+        self.assertNotIn("Root/General", labels)
+        self.assertNotIn("Root/Social", labels)
+        self.assertNotIn("Root/Social/Twitter", labels)
+        self.assertIn("Root/General/Server1", labels)
+        self.assertIn("Root/Social/Twitter/Account1", labels)
+
 
 if __name__ == "__main__":
     unittest.main()

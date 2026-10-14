@@ -53,8 +53,16 @@ class PluginManager:
         """Save enabled plugin list to configuration."""
         cfg_path = self._get_config_path()
         cfg_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        try:
+            os.chmod(cfg_path.parent, 0o700)
+        except OSError:
+            pass
         with open(cfg_path, "w", encoding="utf-8") as f:
             json.dump({"enabled": sorted(enabled_plugins)}, f, indent=2)
+        try:
+            os.chmod(cfg_path, 0o600)
+        except OSError:
+            pass
         self._enabled_plugins = set(enabled_plugins)
 
     def register(self, plugin: Any, name: str | None = None) -> str:

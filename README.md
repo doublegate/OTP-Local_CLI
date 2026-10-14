@@ -1,15 +1,15 @@
 # OTP-Local CLI
 
-[![Release](https://img.shields.io/badge/release-v2.0.0--LTS-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v2.0.0)
+[![Release](https://img.shields.io/badge/release-v2.0.1--LTS-blue.svg)](https://github.com/doublegate/OTP-Local_CLI/releases/tag/v2.0.1)
 [![Python](https://img.shields.io/badge/python-3.14%2B-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](README.md#cross-platform-installation)
 [![Security](https://img.shields.io/badge/security-Zero--Disk--Storage-success.svg)](SECURITY.md)
-[![UI](https://img.shields.io/badge/UI-Textual%20TUI-blueviolet.svg)](docs/11-tui.md)
+[![UI](https://img.shields.io/badge/UI-Textual%20TUI-blueviolet.svg)](docs/specs/11-tui.md)
 
 ![OTP-Local CLI Banner](assets/banner.svg)
 
-Local terminal companion, migration engine, and security layer for accessing two-factor authentication (TOTP/HOTP) tokens across 1Password, local GPG `pass-otp`, Apple Secure Enclave & macOS Keychain, Windows DPAPI & Credential Manager, FIDO2 CTAP 2.1 hardware keys, TPM 2.0 enclaves, and YubiKeys.
+Local terminal companion, migration engine, and security layer for accessing two-factor authentication (TOTP/HOTP) tokens across 1Password, Bitwarden, KeePassXC, local GPG `pass-otp`, Apple Secure Enclave & macOS Keychain, Windows DPAPI & Credential Manager, FIDO2 CTAP 2.1 hardware keys, TPM 2.0 enclaves, and YubiKeys.
 
 Designed for security engineers, operators, and developers who require instant, secure, and auditable OTP access in their local shell environment without persistent disk seed storage or vendor cloud lock-in.
 
@@ -17,7 +17,7 @@ Designed for security engineers, operators, and developers who require instant, 
 
 ## Visual Interface Overview
 
-`otp-local tui` provides a real-time terminal dashboard powered by Textual, featuring dynamic countdown bars, search filtering, one-touch clipboard copying with automatic scrubbing, QR code visualization, and comprehensive environment diagnostics.
+`otp-local tui` provides a real-time terminal dashboard powered by Textual, featuring dynamic countdown bars, 3-tier fuzzy match highlighting, one-touch clipboard copying with automatic scrubbing, QR code visualization, and comprehensive environment diagnostics.
 
 ![OTP-Local TUI Preview](assets/tui_preview.svg)
 
@@ -126,21 +126,22 @@ sequenceDiagram
 
 ## Performance Benchmarks
 
-Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all execution paths. Zero-copy shared memory lookups execute in sub-0.01ms, while the resident daemon reduces multi-account verification latency by over 99% compared to raw external CLI spawning.
+Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all execution paths (`python benchmarks/run_all.py`). Zero-copy shared memory lookups with lockless seqlock synchronization execute in ~0.0022 ms (`2.2 us`), while the 16-worker resident UNIX domain socket daemon executes round-trip IPC in ~0.031 ms (`31 us`).
 
 ![Benchmark Latency Graph](assets/benchmark_timings.svg)
 
 | Execution Path | Mean Latency | Memory Footprint | Storage Persistence | Security Boundary |
 | --- | --- | --- | --- | --- |
-| **POSIX Shared Memory (`/dev/shm`)** | **0.009 ms** | 64 KiB ring buffer | None (RAM-only) | Kernel IPC / 0700 |
+| **POSIX Shared Memory (`/dev/shm` Seqlock)** | **0.0022 ms** | 64 KiB ring buffer | None (RAM-only) | Kernel IPC / 0700 |
+| **Resident Daemon IPC (16-Worker UDS)** | **0.031 ms** | < 2.4 MB locked RSS | None (socket) | Mode 0700 UDS socket |
 | **In-Process RFC 6238** | **0.04 ms** | < 12 KB (ephemeral) | None (in-memory) | Process isolation |
-| **Resident Daemon IPC (CBOR/UDS)** | **0.15 ms** | < 2.4 MB locked RSS | None (socket) | Mode 0700 UDS socket |
+| **Textual TUI Debounced Filter (150 rows)** | **1.50 ms** | Virtualized widget list | None (in-memory) | Process isolation |
 | **macOS Keychain (Secure Enclave)** | **8.4 ms** | System security service | Sealed to SEP / T2 | Apple Hardware Security |
 | **Windows DPAPI (`CryptProtectData`)** | **9.2 ms** | In-process Win32 API | DPAPI master key | OS User / Machine Key |
 | **Hardware TPM 2.0 (`totpm`)** | **12.1 ms** | External hardware | Sealed to PCRs | Silicon hardware |
 | **KeePassXC KDBX4 / CLI** | **14.2 ms** | In-process AES/Argon2 | Encrypted `.kdbx` file | Master key + keyfile |
 | **GPG `pass-otp`** | **18.5 ms** | `gpg-agent` memory | GPG encrypted files | Private GPG key |
-| **Federated Multi-Vault Resolver** | **23.8 ms** | Thread pool concurrent | Multi-vault aggregated | Composite origin policies |
+| **Federated Multi-Vault Resolver (3.75x)** | **21.4 ms** | Async / ThreadPool | Multi-vault aggregated | Composite origin policies |
 | **FIDO2 CTAP 2.1 (`hmac-secret`)** | **42.0 ms** | USB HID transaction | Hardware authenticator | Physical Touch Presence |
 | **Bitwarden Vault (`bw` CLI)** | **178 ms** | CLI subprocess IPC | Encrypted SQLite store | Session encryption key |
 | **1Password CLI (`op`)** | **285 ms** | App IPC boundary | Encrypted SQLite | Biometric / App unlock |
@@ -149,24 +150,25 @@ Performance was evaluated on Linux (Kernel 6.13, AMD/Intel x86_64) across all ex
 
 ## Features
 
-- **Universal Non-Blocking Async Core**: Complete asynchronous rewrite (`authy_local.async_core`) with `AsyncBackend` ABC, `AsyncSyncAdapter`, and `AsyncFederatedResolver` achieving >= 3.0x throughput speedups over multi-vault queries.
-- **Streaming JSON-RPC 2.0 / CBOR Protocol**: High-speed bidirectional daemon and client communication with custom method dispatching and asynchronous notifications.
-- **Extensible Hook-Based Plugin Engine**: Pluggy-powered plugin manager (`authy_local.plugins`) supporting custom backends (`otp_local_register_backend`), token generation events (`otp_local_on_token_generated`), UI actions, and custom security audit rules with fail-closed allowlist configuration (`plugins.json`).
+- **Universal Non-Blocking Async Core**: Complete asynchronous engine (`authy_local.async_core`) with `AsyncBackend` ABC, `AsyncSyncAdapter`, and `AsyncFederatedResolver` using `asyncio.as_completed` early fast-return, achieving a verified 3.75x throughput speedup over sequential multi-vault queries.
+- **Fast CLI Query & Daemon Subcommands**: Direct `otp-local list [--backend ...] [--json]`, `otp-local search QUERY [--code] [--copy] [--json]`, and `otp-local daemon {start,stop,restart,status,clean}` with automatic stale/dead PID pruning and strict POSIX `pid <= 0` process-group bounds protection.
+- **Streaming JSON-RPC 2.0 / CBOR Protocol**: High-speed bidirectional 16-worker daemon and client communication (~31 us IPC round-trip) with custom method dispatching and asynchronous notifications.
+- **Extensible Hook-Based Plugin Engine**: Pluggy-powered plugin manager (`authy_local.plugins`) supporting custom backends (`otp_local_register_backend`), token generation events (`otp_local_on_token_generated`), UI actions, and custom security audit rules with fail-closed `0600` allowlist configuration (`plugins.json`).
 - **Frozen Public Python API**: Semantically versioned, stable public Python interface under `authy_local` with 100% type annotation and backward compatibility shims for v1.x scripts.
 - **Multi-Backend Architecture**: Seamlessly query or switch between 1Password, Bitwarden, KeePassXC, `pass-otp`, macOS Keychain (Apple Secure Enclave), Windows DPAPI & Credential Manager, FIDO2 CTAP 2.1 hardware keys, TPM 2.0 (`totpm`), and YubiKey.
-- **Bitwarden & KeePassXC Integration**: Direct native support for Bitwarden vaults (`bw` CLI with volatile session manager) and KeePassXC KDBX4 databases (master passwords and keyfile credentials).
-- **Federated Multi-Vault Resolver**: High-performance concurrent multi-vault aggregation across all configured backends (`otp-local select --backend federated`), with origin badges (`[1P]`, `[BW]`, `[KP]`, `[GPG]`, `[TPM]`), cross-vault deduplication, and fail-closed fallback code retrieval.
-- **FIDO2 CTAP 2.1 Hardware Keys**: Hardware-bound TOTP encryption using CTAP2 `hmac-secret` and WebAuthn PRF extensions with interactive pulsing touch presence modal (`Fido2TouchModal`) and multi-token redundancy (`--backup-token`).
-- **Resident UNIX Socket Daemon & POSIX Shared Memory**: Background daemon maintaining decrypted tokens in page-locked RAM (`mlockall`), binary CBOR IPC with `SO_PEERCRED` caller verification, and a 64 KiB zero-copy shared memory ring buffer achieving sub-0.01ms code retrieval.
-- **Native Linux PAM Module**: Native C PAM module (`pam_otp_local.so`) for seamless two-factor authentication in `sudo`, SSH, and system authentication stacks without network dependencies.
+- **Bitwarden & KeePassXC Integration**: Direct native support for Bitwarden vaults (`bw` CLI with 2 MiB buffer caps and volatile session manager) and KeePassXC KDBX4 databases (with non-TOTP entry filtering and directory pruning).
+- **Federated Multi-Vault Resolver**: High-performance concurrent multi-vault aggregation across all configured backends (`otp-local select --backend federated`), with origin badges (`[1P]`, `[BW]`, `[KP]`, `[GPG]`, `[TPM]`), per-backend item key mapping (`backend_keys`), cross-vault deduplication, and fail-closed fallback code retrieval.
+- **FIDO2 CTAP 2.1 Hardware Keys**: Hardware-bound TOTP encryption using CTAP2 `hmac-secret` and WebAuthn PRF extensions with interactive pulsing touch presence modal (`Fido2TouchModal`), graceful USB disconnect resilience, and multi-token redundancy (`--backup-token`).
+- **Resident UNIX Socket Daemon & POSIX Shared Memory**: Background daemon maintaining decrypted tokens in page-locked RAM (`mlockall`), binary CBOR IPC with `SO_PEERCRED` caller verification, and a 64 KiB zero-copy shared memory ring buffer with atomic seqlock synchronization and 16-slot linear collision probing achieving ~2.2 us code retrieval.
+- **Native Linux PAM Module**: Native C PAM module (`pam_otp_local.so`) with RFC 8259 JSON escaping and stack zeroization (`explicit_bzero`) for seamless two-factor authentication in `sudo`, SSH, and system authentication stacks without network dependencies.
 - **Cross-Platform Shell Modules**: PowerShell 7+ (`shell/otp-local.ps1`), NuShell (`shell/otp-local.nu`), and WSL2 UNIX-to-named-pipe IPC bridge (`src/authy_local/wsl_bridge.py`).
-- **Modern Textual TUI**: Interactive full-screen terminal interface with live visual countdown progress bars, profile switching, item detail inspector, and searchable token tables.
-- **Fail-Closed Security**: File modes enforced at 0600, parent directories at 0700, and zero sensitive state in process memory or error stack traces.
-- **Runtime Memory Forensics Hardening**: Operating system physical RAM page-locking (`mlock` / `munlock`), core dump exclusion (`madvise(MADV_DONTDUMP)`), core dump disablement (`prctl(PR_SET_DUMPABLE, 0)`), RAII `SecureBuffer` allocator, and signal interception zeroizing heap secrets.
+- **Modern Textual TUI**: Interactive full-screen terminal interface with live `TotpProgressBar` countdowns, 3-tier fuzzy match highlighting, debounced `OptionList` search (~1.5 ms for 150 rows), `CopyToast` notifications, `HelpModal`, and automatic credential zeroization on modal dismissal/unmount.
+- **Fail-Closed Security & Symlink Defense**: Atomic `os.open(..., os.O_NOFOLLOW)` and `os.fstat` verification in importers eliminating TOCTOU symlink races, strict `LABEL` regex validation, `field(repr=False)` secret masking in dataclasses, and a global CLI exception shield preventing secret exposure in tracebacks.
+- **Runtime Memory Forensics Hardening**: Operating system physical RAM page-locking (`mlock` / `munlock`), core dump exclusion (`madvise(MADV_DONTDUMP)`), core dump disablement (`prctl(PR_SET_DUMPABLE, 0)` and `RLIMIT_CORE=0`), mutable bytearray RAII `SecureBuffer` allocator, and signal interception zeroizing heap secrets.
 - **Autonomous Security Auditor v2**: Automated Shannon entropy evaluation (`SEC-005`), host clock drift and NTP skew diagnostics (`SEC-006`), process environment and shell history leak scanning (`SEC-007`), and interactive guided secret rotation (`otp-local audit --rotate`).
 - **Clipboard Scrubber**: High-reliability clipboard scrubber supporting Wayland (`wl-copy`), X11 (`xclip`), Windows (`clip`), and macOS (`pbcopy`) with automatic 30-second memory wipes.
 - **Terminal QR Rendering**: Inspect or cross-enroll tokens via high-contrast UTF-8/ANSI terminal QR codes directly inside the CLI or TUI (`otp-local qr <account>`).
-- **Comprehensive Doctor**: Non-authenticating diagnostic tool (`otp-local doctor` and `otp-local doctor --pam`) evaluating platform tools, system clock synchronization, GPG agents, Secure Enclave, macOS Keychain, TPM devices, FIDO2 authenticators, memory forensics capabilities, and PAM subsystem health.
+- **Comprehensive Cross-Platform Doctor**: Non-authenticating diagnostic tool (`otp-local doctor`, `otp-local doctor --pam`, and `otp-local doctor --install`) evaluating platform tools, system clock synchronization, GPG agents, Secure Enclave, macOS Keychain, TPM devices, FIDO2 authenticators, memory forensics capabilities, and PAM subsystem health, with automated package remediation across macOS (`brew`), Linux (`apt`, `pacman`, `dnf`), and Windows (`winget`, `scoop`).
 - **Standardized Importers/Exporters**: Import or export tokens to standard formats (Aegis JSON, 2FAS, Bitwarden, Google Authenticator URI) with optional GPG recipient encryption.
 
 ---
@@ -208,8 +210,9 @@ pipx install .
 # Or install directly from GitHub without cloning:
 # uv tool install git+https://github.com/doublegate/OTP-Local_CLI.git
 
-# Verify installation and run diagnostics
+# Verify installation and run diagnostics (or auto-install missing packages via apt/pacman/dnf)
 otp-local doctor
+# otp-local doctor --install
 ```
 
 ### Windows (WSL2 / PowerShell)
@@ -245,9 +248,9 @@ pip install .
 <summary><strong>Pre-Built Release Wheel</strong></summary>
 
 ```sh
-pipx install https://github.com/doublegate/OTP-Local_CLI/releases/download/v1.1.0/authy_local-1.1.0-py3-none-any.whl
+pipx install https://github.com/doublegate/OTP-Local_CLI/releases/download/v2.0.1/authy_local-2.0.1-py3-none-any.whl
 # or with uv:
-# uv tool install https://github.com/doublegate/OTP-Local_CLI/releases/download/v1.1.0/authy_local-1.1.0-py3-none-any.whl
+# uv tool install https://github.com/doublegate/OTP-Local_CLI/releases/download/v2.0.1/authy_local-2.0.1-py3-none-any.whl
 ```
 
 </details>
@@ -264,37 +267,43 @@ The following table contrasts `OTP-Local CLI` against mainstream open-source CLI
 | **Storage Architecture** | **Zero-Disk-Storage** (RAM only) | Cloud Vault + Local Cache | Encrypted GPG Files | Encrypted SQLite / File | Encrypted Phone Backup | Hardware Key Chip | None (Stateless argv) | Cloud Database |
 | **Interactive Dashboard** | **Yes** (live bars, hotkeys) | No | No (3rd party UIs) | No | Yes (Fuzzy finder) | No | No | Yes (GUI only) |
 | **1Password Integration** | **Native** (`op` backend) | Native | No | No | No | No | No | No |
+| **Bitwarden & KeePassXC** | **Native** (`bw` + `.kdbx4`) | No | No | No | No | No | No | No |
 | **Apple Secure Enclave** | **Native** (macOS Keychain) | No | No | No | No | No | No | No |
 | **Hardware TPM2 Support** | **Native** (PCR enclaves) | No | No | No | No | No | No | No |
+| **FIDO2 CTAP 2.1 Support** | **Native** (`hmac-secret`) | No | No | No | No | No | No | No |
 | **YubiKey OATH Support** | **Native** (`ykman` bridge) | No | Via GPG smartcard | No | No | Native | No | No |
 | **pass-otp / totpm Store** | **Native** | No | Native | No | No | No | No | No |
 | **Clipboard Auto-Wiper** | **Yes** (Wayland + X11, 30s) | No | Optional (`-c`) | No | No | No | No | No |
-| **Session Agent Daemon** | **Yes** (RAM memory-locked) | Background daemon | gpg-agent | No | No | No | No | Proprietary sync |
-| **Security Hygiene Auditor**| **Yes** (RFC rules SEC-001..4)| No | No | No | No | No | No | No |
+| **Session Agent Daemon** | **Yes** (SHM + 16-worker UDS) | Background daemon | gpg-agent | No | No | No | No | Proprietary sync |
+| **Security Hygiene Auditor**| **Yes** (RFC rules SEC-001..7)| No | No | No | No | No | No | No |
 | **Terminal QR Rendering** | **Yes** (`qrencode` UTF-8) | No | Optional (`-q`) | No | No | No | No | No |
 | **License / Freedom** | **MIT (Open Source)** | Proprietary (Paid sub) | GPL-2.0 (Open Source) | MIT (Open Source) | GPL-3.0 (Open Source) | Apache-2.0 | GPL-3.0 | Proprietary (Discontinued)|
 
 ### Detailed Architectural Distinctions
 
-- **Compared to 1Password CLI (`op`)**: While `op` requires terminal operators to invoke individual subcommands and pipe output through shell utilities, `OTP-Local CLI` wraps `op` in a high-speed Textual dashboard with real-time countdown progress bars, live fuzzy filtering, and clipboard auto-wiping, while also allowing unified fallback to hardware TPM2, Apple Secure Enclave, or local GPG stores without credential duplication.
+- **Compared to 1Password CLI (`op`)**: While `op` requires terminal operators to invoke individual subcommands and pipe output through shell utilities, `OTP-Local CLI` wraps `op` in a high-speed Textual dashboard with real-time countdown progress bars, live fuzzy filtering, and clipboard auto-wiping, while also allowing unified fallback to hardware TPM2, FIDO2 keys, Apple Secure Enclave, Bitwarden, KeePassXC, or local GPG stores without credential duplication.
 - **Compared to `pass-otp`**: Standard `pass-otp` is tightly tied to the ZX2C4 password store on disk and lacks a unified multi-enclave model or a modern terminal UI. `OTP-Local CLI` can inspect and audit `pass-otp` stores while providing interactive TUI navigation and multi-backend switching.
 - **Compared to Apple Keychain / Touch ID wrappers**: Native Apple Keychain CLI tools lack RFC 6238 countdown timers, live clipboard scrubbers, multi-backend portability, and cross-platform consistency. `OTP-Local CLI` harnesses `/usr/bin/security` sealed with Apple Silicon SEP or T2 chip hardware Data Protection while allowing instant switching between macOS Keychain, YubiKeys, and 1Password.
 - **Compared to `totp-cli` and `termotp`**: Tools like `totp-cli` maintain an on-disk encrypted database requiring a master password, whereas `OTP-Local CLI` enforces strict zero-disk-storage where secrets remain confined to hardware enclaves or existing authenticated vaults. `termotp` relies on static mobile exports (Aegis), whereas `OTP-Local CLI` interfaces with live system enclaves and password engines.
 - **Compared to `oathtool`**: `oathtool` requires passing raw base32 secrets via command-line arguments, which exposes unencrypted keys in the system process table (`/proc/PID/cmdline`) and shell histories (`~/.bash_history`). `OTP-Local CLI` passes secrets via secure stdin pipes, subreaper process trees, and memory-locked buffers.
-- **Compared to `ykman oath`**: YubiKey Manager is limited strictly to physical YubiKey hardware tokens. `OTP-Local CLI` bridges YubiKey hardware, Apple Secure Enclave, TPM 2.0 chips, 1Password, and local encrypted stores under a single, unified interface and uniform keybindings.
+- **Compared to `ykman oath`**: YubiKey Manager is limited strictly to physical YubiKey hardware tokens. `OTP-Local CLI` bridges YubiKey hardware, FIDO2 CTAP 2.1 security keys, Apple Secure Enclave, TPM 2.0 chips, 1Password, Bitwarden, KeePassXC, and local encrypted stores under a single, unified interface and uniform keybindings.
 - **Compared to Legacy Twilio Authy Desktop**: Following Twilio's formal discontinuation of Authy Desktop in August 2024, `OTP-Local CLI` provides a completely offline, zero-telemetry, developer-friendly terminal companion that liberates users from proprietary cloud lock-in.
 
 ---
 
 ## Quick Start CLI Usage
 
-### 1. Run Diagnostic Health Check
+### 1. Run Diagnostic Health Check & Automated Remediation
 
 ```sh
+# Probe system tools, hardware enclaves, clock sync, and memory security
 otp-local doctor
+
+# Automatically install missing dependencies via brew / apt / pacman / dnf / winget
+otp-local doctor --install
 ```
 
-Validates availability of platform commands, 1Password CLI, GPG agent, Wayland/X11 clipboard, and hardware security modules without requiring authentication.
+Validates availability of platform commands, 1Password CLI, Bitwarden CLI, KeePassXC, GPG agent, Wayland/X11 clipboard, and hardware security modules without requiring authentication.
 
 ### 2. Launch the Terminal User Interface (TUI)
 
@@ -305,14 +314,16 @@ otp-local tui
 Hotkeys:
 
 - `Enter`: Copy currently focused OTP code to clipboard (arms 30s auto-wiper).
-- `v`: View account metadata and parameters modal.
-- `q`: Render high-resolution terminal QR code.
-- `b`: Switch active backend (1Password, pass-otp, macOS Keychain, TPM2, YubiKey).
-- `/` or `f`: Instant fuzzy filter across accounts and issuers.
-- `d`: Run doctor capability assessment panel.
+- `v`: View account metadata and parameters modal (`InteractiveQrModal`).
+- `u`: Open interactive Credential Security Audit report modal (`AuditReportModal`).
+- `q`: Render high-resolution terminal QR code or quit from dashboard.
+- `b`: Switch active backend (`1Password`, `Bitwarden`, `KeePassXC`, `Federated`, `pass-otp`, `macOS Keychain`, `Windows DPAPI`, `FIDO2`, `TPM2`, `YubiKey`).
+- `/` or `f`: Instant 3-tier fuzzy filter across accounts, issuers, and folders.
+- `d`: Request confirmed deletion of selected local entry or run doctor panel.
+- `F1` or `?`: Open keyboard shortcuts help modal (`HelpModal`).
 - `Esc` / `Ctrl+C`: Gracefully exit and wipe in-memory secrets.
 
-### 3. Generate or Copy Tokens from the Command Line
+### 3. Generate, Search, List, or Copy Tokens from the Command Line
 
 ```sh
 # Display token directly in terminal
@@ -321,23 +332,31 @@ otp-local show "GitHub"
 # Copy token to system clipboard with 30s auto-wipe
 otp-local copy "Amazon Web Services"
 
+# List accounts across a backend (supports --json)
+otp-local list --backend federated --json
+
+# Search accounts and immediately retrieve or copy a matching code
+otp-local search "GitHub" --backend federated --code
+
 # Interactive fuzzy search and selection
 otp-local select
 ```
 
-### 4. Ephemeral Session Agent
+### 4. Resident IPC Daemon & Ephemeral Session Agent
 
-Start or inspect the local session daemon for fast token acquisition:
+Start or manage the local resident daemon (`otp-local daemon`) or session agent (`otp-local agent`) for sub-millisecond token acquisition:
 
 ```sh
-# Start ephemeral daemon with 15-minute timeout
-otp-local agent start --timeout 900
+# Start resident daemon with locked memory and POSIX SHM ring buffer
+otp-local daemon start
 
-# Query daemon status
-otp-local agent status
+# Query daemon status or restart daemon
+otp-local daemon status
+otp-local daemon restart
 
-# Terminate session daemon and zeroize cache
-otp-local agent stop
+# Stop daemon and prune stale/dead PID files and sockets
+otp-local daemon stop
+otp-local daemon clean
 ```
 
 ### 5. Security Audit and Secret Rotation
@@ -375,14 +394,9 @@ pip install -r requirements-dev.txt
 pip install --no-build-isolation --no-deps -e .
 npm ci --ignore-scripts
 
-# Verify test suite and quality gates
-python scripts/bundle_guides.py
-python scripts/check_docs.py
-ruff check src tests scripts
-ruff format --check src tests scripts
-npx markdownlint-cli2
-pytest tests -v
-python scripts/smoke_package.py
+# Verify test suite, benchmarks, and quality gates
+bash scripts/check.sh
+python benchmarks/run_all.py
 ```
 
 ---
@@ -390,10 +404,13 @@ python scripts/smoke_package.py
 ## Documentation Index
 
 - [Project Status & Decisions](PROJECT-STATUS.md)
-- [Architecture & Contract Specification](docs/specs/03-cli-specification.md)
+- [Delivery Roadmap (v1.0 – v3.0 LTS)](ROADMAP.md)
+- [Complete Documentation & Specification Index](docs/00-index.md)
+- [Architecture & CLI Contract Specification](docs/specs/03-cli-specification.md)
 - [Textual TUI Guide & Shortcuts](docs/specs/11-tui.md)
 - [Desktop Integration & Systemd Units](docs/specs/13-desktop-integration.md)
 - [Security Model & Threat Boundaries](SECURITY.md)
+- [Security Architecture & Audit Waivers](docs/specs/06-security-architecture.md)
 - [Optional Hardware & TPM Setup](docs/operations/2026-10-12-optional-setup.md)
 - [Contributing Guidelines](CONTRIBUTING.md)
 - [Release Changelog](CHANGELOG.md)

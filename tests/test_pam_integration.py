@@ -76,35 +76,61 @@ class TestPamIntegration(unittest.TestCase):
                 tmp_build.mkdir(exist_ok=True)
                 cls.pam_so_path = tmp_build / "pam_otp_local.so"
                 c_src = Path(__file__).resolve().parents[1] / "pam" / "pam_otp_local.c"
-                subprocess.run(
-                    [
-                        "gcc",
-                        "-Wall",
-                        "-Wextra",
-                        "-O2",
-                        "-fPIC",
-                        "-shared",
-                        str(c_src),
-                        "-o",
-                        str(cls.pam_so_path),
-                        "-lpam",
-                    ],
-                    check=True,
-                )
+                try:
+                    subprocess.run(
+                        [
+                            "gcc",
+                            "-Wall",
+                            "-Wextra",
+                            "-O2",
+                            "-fPIC",
+                            "-fstack-protector-strong",
+                            "-D_FORTIFY_SOURCE=2",
+                            "-shared",
+                            "-Wl,-z,relro,-z,now,-z,noexecstack",
+                            str(c_src),
+                            "-o",
+                            str(cls.pam_so_path),
+                            "-lpam",
+                        ],
+                        check=True,
+                        capture_output=True,
+                    )
+                except (subprocess.CalledProcessError, OSError) as exc:
+                    raise unittest.SkipTest(
+                        f"Native Linux PAM module compilation failed: {exc}. "
+                        "libpam development headers or gcc are missing on host."
+                    ) from exc
+
+        if not cls.pam_so_path.exists():
+            raise unittest.SkipTest(f"pam_otp_local.so binary does not exist at {cls.pam_so_path}")
 
         libpam_name = ctypes.util.find_library("pam")
         if not libpam_name:
             raise unittest.SkipTest("libpam.so is not available on host system")
-        cls.libpam = ctypes.CDLL(libpam_name)
+        try:
+            cls.libpam = ctypes.CDLL(libpam_name)
+        except OSError as exc:
+            raise unittest.SkipTest(f"Failed to load libpam ({libpam_name}): {exc}") from exc
 
         libc_name = ctypes.util.find_library("c")
-        cls.libc = ctypes.CDLL(libc_name)
+        if not libc_name:
+            raise unittest.SkipTest("libc is not available on host system")
+        try:
+            cls.libc = ctypes.CDLL(libc_name)
+        except OSError as exc:
+            raise unittest.SkipTest(f"Failed to load libc ({libc_name}): {exc}") from exc
         cls.libc.strdup.restype = ctypes.c_void_p
         cls.libc.strdup.argtypes = [ctypes.c_char_p]
         cls.libc.malloc.restype = ctypes.c_void_p
         cls.libc.malloc.argtypes = [ctypes.c_size_t]
 
-        cls.pam_mod = ctypes.CDLL(str(cls.pam_so_path))
+        try:
+            cls.pam_mod = ctypes.CDLL(str(cls.pam_so_path))
+        except OSError as exc:
+            raise unittest.SkipTest(
+                f"Failed to load compiled PAM module {cls.pam_so_path}: {exc}"
+            ) from exc
 
     def setUp(self) -> None:
         self.tmp_dir = tempfile.TemporaryDirectory()
@@ -427,6 +453,158 @@ class TestPamIntegration(unittest.TestCase):
             parsed = json.loads(mock_json_out.getvalue())
             self.assertIn("overall_status", parsed)
             self.assertIsInstance(cli_json_rc, int)
+
+    def test_pam_json_escaping_special_characters(self) -> None:
+        """Verify accounts with quotes/backslashes and codes with special chars are escaped safely."""
+        server = DaemonServer(
+            sock_path=self.test_sock,
+            shm_name=self.test_shm,
+            pid_file=self.test_pid,
+            env=self.env,
+        )
+        t = threading.Thread(target=server.start, daemon=True)
+        t.start()
+        for _ in range(50):
+            if self.test_sock.exists():
+                break
+            time.sleep(0.05)
+
+        try:
+            # 1. Account with backslash (Active Directory style: DOMAIN\user)
+            ad_account = r"DOMAIN\user"
+            secret = "JBSWY3DPEHPK3PXP"
+            cache_res = send_ipc_request(
+                {"action": "cache_token", "account": ad_account, "secret": secret},
+                sock_path=self.test_sock,
+            )
+            self.assertEqual(cache_res["status"], "ok")
+
+            params = parse_secret_or_uri(secret, fallback_label=ad_account)
+            valid_code, _ = generate_totp_code(params)
+
+            @PAM_CONV_FUNC
+            def ad_conv(num_msg, msg, resp_out, appdata):
+                resp_ptr = self.libc.malloc(ctypes.sizeof(PamResponse) * num_msg)
+                p_resp = ctypes.cast(resp_ptr, ctypes.POINTER(PamResponse))
+                for i in range(num_msg):
+                    p_resp[i].resp = self.libc.strdup(valid_code.encode("utf-8"))
+                    p_resp[i].resp_retcode = 0
+                resp_out[0] = p_resp
+                return 0
+
+            pamh, pam_conv = self._create_pam_handle(ad_conv, username=ad_account)
+            args = (ctypes.c_char_p * 3)(
+                f"socket_path={self.test_sock}".encode("utf-8"),
+                f"account={ad_account}".encode("utf-8"),
+                b"debug",
+            )
+            rc = self.pam_mod.pam_sm_authenticate(pamh, 0, 3, args)
+            self.assertEqual(
+                rc, PAM_SUCCESS, "Authentication failed on escaped backslash account name"
+            )
+            self.libpam.pam_end(pamh, rc)
+
+            # 2. Account with double quote (alice"admin)
+            quote_account = 'alice"admin'
+            send_ipc_request(
+                {"action": "cache_token", "account": quote_account, "secret": secret},
+                sock_path=self.test_sock,
+            )
+            pamh2, pam_conv2 = self._create_pam_handle(ad_conv, username=quote_account)
+            args2 = (ctypes.c_char_p * 3)(
+                f"socket_path={self.test_sock}".encode("utf-8"),
+                f"account={quote_account}".encode("utf-8"),
+                b"debug",
+            )
+            rc2 = self.pam_mod.pam_sm_authenticate(pamh2, 0, 3, args2)
+            self.assertEqual(
+                rc2, PAM_SUCCESS, "Authentication failed on escaped quote account name"
+            )
+            self.libpam.pam_end(pamh2, rc2)
+
+            # 3. Code containing special characters (must not crash daemon)
+            @PAM_CONV_FUNC
+            def malformed_conv(num_msg, msg, resp_out, appdata):
+                resp_ptr = self.libc.malloc(ctypes.sizeof(PamResponse) * num_msg)
+                p_resp = ctypes.cast(resp_ptr, ctypes.POINTER(PamResponse))
+                for i in range(num_msg):
+                    p_resp[i].resp = self.libc.strdup(b'123"456')
+                    p_resp[i].resp_retcode = 0
+                resp_out[0] = p_resp
+                return 0
+
+            pamh3, pam_conv3 = self._create_pam_handle(malformed_conv, username=ad_account)
+            args3 = (ctypes.c_char_p * 3)(
+                f"socket_path={self.test_sock}".encode("utf-8"),
+                f"account={ad_account}".encode("utf-8"),
+                b"debug",
+            )
+            rc3 = self.pam_mod.pam_sm_authenticate(pamh3, 0, 3, args3)
+            self.assertEqual(rc3, PAM_AUTH_ERR)
+            self.libpam.pam_end(pamh3, rc3)
+        finally:
+            server._running = False
+            t.join(timeout=2.0)
+            server.cleanup()
+
+    def test_pam_concurrent_authentication_threads(self) -> None:
+        """Verify multiple threads can authenticate simultaneously against the daemon."""
+        server = DaemonServer(
+            sock_path=self.test_sock,
+            shm_name=self.test_shm,
+            pid_file=self.test_pid,
+            env=self.env,
+        )
+        t = threading.Thread(target=server.start, daemon=True)
+        t.start()
+        for _ in range(50):
+            if self.test_sock.exists():
+                break
+            time.sleep(0.05)
+
+        try:
+            secret = "JBSWY3DPEHPK3PXP"
+            send_ipc_request(
+                {"action": "cache_token", "account": "conc_user", "secret": secret},
+                sock_path=self.test_sock,
+            )
+            params = parse_secret_or_uri(secret, fallback_label="conc_user")
+            valid_code, _ = generate_totp_code(params)
+
+            def auth_worker():
+                @PAM_CONV_FUNC
+                def c_conv(num_msg, msg, resp_out, appdata):
+                    resp_ptr = self.libc.malloc(ctypes.sizeof(PamResponse) * num_msg)
+                    p_resp = ctypes.cast(resp_ptr, ctypes.POINTER(PamResponse))
+                    for i in range(num_msg):
+                        p_resp[i].resp = self.libc.strdup(valid_code.encode("utf-8"))
+                        p_resp[i].resp_retcode = 0
+                    resp_out[0] = p_resp
+                    return 0
+
+                pamh, pam_conv = self._create_pam_handle(c_conv, username="conc_user")
+                args = (ctypes.c_char_p * 3)(
+                    f"socket_path={self.test_sock}".encode("utf-8"),
+                    b"account=conc_user",
+                    b"debug",
+                )
+                rc = self.pam_mod.pam_sm_authenticate(pamh, 0, 3, args)
+                self.libpam.pam_end(pamh, rc)
+                return rc
+
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+                futures = [ex.submit(auth_worker) for _ in range(8)]
+                results = [f.result() for f in futures]
+
+            self.assertEqual(len(results), 8)
+            for r in results:
+                self.assertEqual(r, PAM_SUCCESS)
+        finally:
+            server._running = False
+            t.join(timeout=2.0)
+            server.cleanup()
 
 
 if __name__ == "__main__":

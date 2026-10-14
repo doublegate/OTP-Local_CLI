@@ -10,6 +10,7 @@ from pathlib import Path
 from ..enrollment import OtpParameters, generate_totp_code
 from ..errors import AppError
 from ..processes import run
+from ..security import secure_zero
 
 KEYCHAIN_SERVICE = "otp-local"
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
@@ -111,16 +112,18 @@ def keychain_code(account: str, env: dict[str, str], timestamp: float | None = N
     if result.returncode != 0:
         raise AppError(4)
 
-    raw_secret = result.stdout.decode("utf-8", errors="replace").strip()
-    if not raw_secret:
+    raw_secret_buf = bytearray(result.stdout.strip())
+    if not raw_secret_buf:
         raise AppError(5)
 
+    raw_secret = raw_secret_buf.decode("utf-8", errors="replace")
     try:
         params = OtpParameters(secret=raw_secret, account=account)
         code, _ = generate_totp_code(params, timestamp=timestamp)
         return code
     finally:
         raw_secret = ""
+        secure_zero(raw_secret_buf)
 
 
 def keychain_enroll(account: str, secret: str, env: dict[str, str]) -> None:

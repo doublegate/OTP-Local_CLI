@@ -1,8 +1,12 @@
 {
   "name": "otp-local-docs",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "devDependencies": {
     "markdownlint-cli2": "0.23.3"
+  },
+  "overrides": {
+    "katex": "^0.18.2",
+    "smol-toml": "^1.9.0"
   }
 }

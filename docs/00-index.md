@@ -12,6 +12,7 @@ See [project status](../PROJECT-STATUS.md) for verified completion and blockers.
 | [Security and data](specs/04-security-and-data.md) | Threat boundaries, private ledger, secret lifecycle |
 | [Development and testing](specs/05-development-and-testing.md) | Toolchain, fixtures, gates and implementation order |
 | [Instantiation](specs/06-installation-and-instantiation.md) | Host preparation, install, upgrade and uninstall |
+| [Security architecture](specs/06-security-architecture.md) | Runtime defense-in-depth boundaries and audit waivers |
 | [Migration and recovery](specs/07-migration-and-recovery.md) | Human account workflow and failure handling |
 | [Optional backends](specs/08-optional-backends.md) | pass-otp, totpm, compatibility and skip gates |
 | [Operations and completion](specs/09-operations-and-completion.md) | Maintenance, incidents, final acceptance |
@@ -42,6 +43,10 @@ See [project status](../PROJECT-STATUS.md) for verified completion and blockers.
 | [Memory forensics decision](adr/0013-memory-forensics-and-process-isolation.md) | Runtime memory forensics hardening and process isolation |
 | [v2 architecture](specs/19-v2-architecture.md) | Universal async core, extensible plugin engine, and public API freeze |
 | [v2 async core decision](adr/0014-v2-async-core-and-plugin-system.md) | Universal async core, extensible plugin hook engine, and v2.0.0 freeze |
+| [Secret service and biometrics](specs/20-secret-service-and-biometrics.md) | Freedesktop Secret Service (D-Bus) and platform biometrics |
+| [Specialized OTP protocols](specs/21-specialized-otp-protocols.md) | Steam Guard, Blizzard, Yandex, and RFC 4226 HOTP counter sync |
+| [Encrypted backup and sync](specs/22-encrypted-backup-and-sync.md) | Zero-knowledge Age container and WebDAV / S3 sync protocols |
+| [Passkeys and WebAuthn](specs/23-passkey-and-webauthn-bridge.md) | Sovereign identity, FIDO2 passkeys, and WebAuthn assertion bridge |
 
 Start delivery at the [roadmap](../ROADMAP.md) and [phase/sprint index](../to-dos/README.md).
 [PROJECT-STATUS.md](../PROJECT-STATUS.md) remains the single authority for progress.

@@ -78,10 +78,13 @@ def run(
     stdout_cap: int = 64,
     stderr_cap: int = 65536,
     input_data: bytes | None = None,
+    stdin: bytes | None = None,
     interactive: bool = False,
     preserve_session: bool = False,
 ) -> Completed:
     """Drain both pipes concurrently; stderr is counted and discarded immediately."""
+    if input_data is None and stdin is not None:
+        input_data = stdin
     child = None
     try:
         child = subprocess.Popen(

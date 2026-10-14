@@ -18,6 +18,7 @@ from ..processes import run
 LABEL = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z")
 SESSION_KEY_PATTERN = re.compile(r"^[A-Za-z0-9+/=_-]{20,}$")
 DEFAULT_SESSION_TTL = 900.0  # 15 minutes
+BITWARDEN_LIST_STDOUT_CAP = 2 * 1024 * 1024  # 2MB stdout capture cap for large enterprise vaults
 
 
 class BitwardenSessionManager:
@@ -84,7 +85,7 @@ class BitwardenSessionManager:
             [bw, "unlock", "--raw"],
             env=clean_env,
             timeout=15,
-            stdin=password.encode("utf-8"),
+            input_data=password.encode("utf-8"),
             stdout_cap=4096,
             stderr_cap=4096,
         )
@@ -176,7 +177,7 @@ def list_items(env: dict[str, str], search: str | None = None) -> list[dict[str,
         cmd.extend(["--search", search])
 
     clean_env = child_environment(env)
-    res = run(cmd, env=clean_env, timeout=15, stdout_cap=1048576)
+    res = run(cmd, env=clean_env, timeout=15, stdout_cap=BITWARDEN_LIST_STDOUT_CAP)
     if res.returncode != 0:
         raise AppError(4)
 
@@ -195,6 +196,9 @@ def list_items(env: dict[str, str], search: str | None = None) -> list[dict[str,
         return totp_items
     except Exception:
         raise AppError(4) from None
+
+
+_bw_list_items = list_items
 
 
 def bitwarden_records(env: dict[str, str], search: str | None = None) -> list[tuple[str, str]]:
@@ -303,7 +307,7 @@ def bitwarden_enroll(
         [bw, "create", "item"],
         env=clean_env,
         timeout=15,
-        stdin=payload.encode("utf-8"),
+        input_data=payload.encode("utf-8"),
         stdout_cap=65536,
     )
     if res.returncode != 0:

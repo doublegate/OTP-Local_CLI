@@ -2,6 +2,46 @@
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-14
+
+### Added
+
+- CLI subcommands `otp-local list` (`--json`, `--backend`) and `otp-local search QUERY` (`--code`, `--copy`, `--json`, `--backend`) in `src/authy_local/cli.py` for non-interactive multi-vault querying and token retrieval.
+- Daemon lifecycle subcommands `otp-local daemon restart` and `otp-local daemon clean` alongside root flag compatibility normalization (`--daemon`, `--status`, `--stop`, `--clean`, `--doctor`, `--pick`).
+- Automated multi-distro Linux dependency remediation in `src/authy_local/doctor.py` (`otp-local doctor --install` / `--fix`) supporting `apt-get` (Debian/Ubuntu), `pacman` (Arch/CachyOS), and `dnf` (Fedora/RHEL) with automatic root/sudo privilege detection.
+- Textual TUI enhancements in `src/authy_local/tui.py` and `src/authy_local/tui_items.py`: `TotpProgressBar` live countdown widget, 3-tier fuzzy match highlighting (`Exact`, `Prefix`, `Subsequence`), `CopyToast` notification banners, and `HelpModal` keyboard shortcut reference (`F1` / `?`).
+- Comprehensive 7-target authentic microbenchmark suite in `benchmarks/run_all.py` (`benchmark_capabilities.py`, `benchmark_totp_cache.py`, `benchmark_ipc.py`, `benchmark_shm.py`, `benchmark_tui.py`, `benchmark_federation.py`) verifying concrete latency and speedup SLAs without mocks or synthetic sleeps.
+- Strategic v2.1.0 – v3.0.0 LTS roadmap and specification architecture across `ROADMAP.md`, `to-dos/phase-13-*.md` through `to-dos/phase-22-*.md`, `to-dos/sprints/13.1.md` through `22.2.md` (allocating 80 tasks `T-AUTH-130`–`T-AUTH-227`), and `docs/specs/20-*.md` through `23-*.md`.
+- Security architecture and dependency audit waiver specification in `docs/specs/06-security-architecture.md` (`WAIVER-2026-NPM-01`).
+- Adversarial and stress verification test suites (`test_m1_challenger_wheel_security.py`, `test_m2_security_hardening.py`, `test_m2_challenger_adversarial.py`, `test_m2_r2_adversarial_memory_protection.py`, `test_adversarial_m2_stress_verification.py`, `test_m3_adversarial_stress.py`, `test_m4_adversarial_stress.py`, `test_m4_2_adversarial_vault_doctor.py`, `test_m5_challenger_tier5_adversarial.py`, `test_m5_adversarial_concurrency_e2e_packaging.py`), expanding the total automated suite to 1,258 tests (1,140 unit/integration + 118 opaque-box E2E).
+
+### Changed
+
+- Optimized `AsyncFederatedResolver` in `src/authy_local/async_core.py` to use `asyncio.as_completed` for early fast-return code retrieval and `executor.shutdown(wait=False, cancel_futures=True)` in `src/authy_local/federation.py` with per-backend item key tracking (`backend_keys`), achieving a verified 3.75x multi-vault speedup.
+- Upgraded POSIX shared memory ring buffer (`src/authy_local/shm.py`) with atomic spinlock/flock write serialization, lockless seqlock read counters, and 16-slot linear collision probing, achieving ~2.2 us zero-copy reads with zero torn reads across 940,000+ concurrent queries.
+- Upgraded UNIX domain socket IPC daemon (`src/authy_local/daemon.py`) to a 16-worker concurrent `ThreadPoolExecutor`, reducing IPC round-trip latency to ~31 us.
+- Extracted 841 lines of legacy curses helpers from `src/authy_local/tui.py` into `src/authy_local/_curses_compat.py` and implemented debounced `OptionList` search population (~1.5 ms for 150 virtualized rows).
+- Expanded subprocess stdout buffer caps to 2 MiB across Bitwarden (`src/authy_local/backends/bitwarden.py`), KeePassXC (`src/authy_local/backends/keepass.py`), and FIDO2 (`src/authy_local/backends/fido2.py`) backends to support large enterprise vaults without truncation.
+- Upgraded `.github/workflows/ci.yml` to Node.js 22 LTS, added `libpam0g-dev` for native Linux PAM compilation, and added automated `dist/wheels/` wheelhouse staging.
+
+### Fixed
+
+- Resolved GitHub Actions CI `test_pam_integration` compilation failures on Ubuntu runners by installing `libpam0g-dev` and fixing Python 3 exception tuple syntax in `tests/test_pam_integration.py`.
+- Resolved `test_installer` wheel validation failures by expanding the `Requires-Dist` allowlist regex in `src/authy_local/installer.py` to support `fido2` and `pluggy` alongside `textual` with header string coercion.
+- Fixed KeePassXC backend (`src/authy_local/backends/keepass.py`) to filter out non-TOTP password/note entries during XML export parsing and prune `[DIR]` folder markers during directory listing.
+- Fixed FIDO2 backend (`src/authy_local/backends/fido2.py`) to gracefully map USB device disconnects, missing `hmac-secret` extensions, and `EACCES` permission errors to `AppError(3)`.
+- Eliminated container/sandbox `/proc/{pid}/stat` kernel thread PID collisions in `tests/test_regressions.py` by verifying process UID ownership and `/proc/{pid}/cmdline` identity.
+
+### Security
+
+- Eliminated TOCTOU symlink substitution races in `src/authy_local/importers.py` by opening source files atomically with `os.open(..., os.O_RDONLY | os.O_NOFOLLOW)` and verifying regular file descriptors via `os.fstat(fd)`.
+- Prevented secret exposure in tracebacks, crash logs, and debug representations by adding `field(repr=False)` on `OtpParameters.secret` (`src/authy_local/enrollment.py`) and `Completed` subprocess results (`src/authy_local/processes.py`), backed by a top-level CLI exception shield in `src/authy_local/cli.py`.
+- Hardened daemon PID file parsing across `daemon_start()`, `daemon_stop()`, `daemon_clean()`, and `daemon_status()` in `src/authy_local/daemon.py` to strictly reject `pid <= 0`, preventing POSIX process-group broadcast signaling (`os.kill(0, ...)` / `os.kill(-1, ...)`).
+- Implemented RFC 8259 C JSON string escaping and `explicit_bzero` stack buffer zeroization in `pam/pam_otp_local.c`.
+- Enforced strict alphanumeric account label validation (`LABEL`) in `src/authy_local/backends/hardware.py` and `0o600` file permissions on plugin allowlist configurations in `src/authy_local/plugins/manager.py`.
+- Implemented deterministic credential zeroization upon Textual modal dismissal and unmount across `AddOtpModal`, `ScopeModal`, `ConfirmDeleteModal`, and `UnlockModal` in `src/authy_local/tui.py`, and guarded `daemon.py` `flush_cache()` against released shared memory buffers.
+- Added npm `overrides` in `package.json` (`katex@^0.18.2`, `smol-toml@^1.9.0`) to remediate transitive documentation linter vulnerabilities.
+
 ## [2.0.0] - 2026-10-13
 
 ### Added

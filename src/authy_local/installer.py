@@ -232,14 +232,18 @@ def _wheel(path):
             if content.get_all("Name") != ["authy-local"]:
                 raise ValueError
             pattern = re.compile(
-                r"^textual(\s*(==|>=|<=|>|<|~=)\s*[\w\.\*\+!]+(\s*,\s*(==|>=|<=|>|<|~=)\s*[\w\.\*\+!]+)*)?$"
+                r"^(textual|fido2|pluggy)(\s*(==|>=|<=|>|<|~=)\s*[\w\.\*\+!]+(\s*,\s*(==|>=|<=|>|<|~=)\s*[\w\.\*\+!]+)*)?$"
             )
             for req in content.get_all("Requires-Dist") or ():
-                if any(ch in req for ch in (";", "[", "]", "@")):
-                    raise ValueError("Invalid dependency")
-                if not pattern.match(req.strip()):
-                    raise ValueError("Invalid dependency")
-    except OSError, ValueError, zipfile.BadZipFile, UnicodeError:
+                try:
+                    req_str = str(req)
+                    if any(ch in req_str for ch in (";", "[", "]", "@")):
+                        raise ValueError("Invalid dependency")
+                    if not pattern.match(req_str.strip()):
+                        raise ValueError("Invalid dependency")
+                except ValueError, TypeError:
+                    raise ValueError("Invalid dependency") from None
+    except OSError, ValueError, zipfile.BadZipFile, UnicodeError, TypeError:
         raise InstallError("Invalid local wheel.") from None
     return path, _hash(path.read_bytes())
 
@@ -298,7 +302,12 @@ def _stage(wheel, destination):
                 str(wheel),
             ],
             [str(destination / "bin/python"), "-I", "-m", "authy_local", "--help"],
-            [str(destination / "bin/python"), "-I", "-c", "import authy_local.tui, textual"],
+            [
+                str(destination / "bin/python"),
+                "-I",
+                "-c",
+                "import authy_local.tui, textual, fido2, pluggy",
+            ],
         ):
             try:
                 result = subprocess.run(

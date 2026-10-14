@@ -21,11 +21,21 @@ migration, and evidence-based closure. Phases 0–2 are complete; Phase 3 awaits
 | [10: federation](phase-10-vault-federation.md) | [10.1](sprints/10.1.md), [10.2](sprints/10.2.md) | Bitwarden CLI, KeePassXC KDBX4 direct engine, and multi-vault resolver |
 | [11: security v2](phase-11-security-auditor-v2.md) | [11.1](sprints/11.1.md), [11.2](sprints/11.2.md) | Memory forensics hardening (mlock/MADV_DONTDUMP) and security auditor v2 |
 | [12: v2 architecture](phase-12-v2-architecture.md) | [12.1](sprints/12.1.md), [12.2](sprints/12.2.md) | Universal async core, plugin hook engine, and v2.0.0 public API freeze |
+| [13: secret service & biometrics](phase-13-secret-service-biometrics.md) | [13.1](sprints/13.1.md), [13.2](sprints/13.2.md) | Freedesktop Secret Service (D-Bus) and platform biometrics (v2.1.0) |
+| [14: specialized protocols](phase-14-specialized-otp-protocols.md) | [14.1](sprints/14.1.md), [14.2](sprints/14.2.md) | Steam Guard, Blizzard, Yandex, and RFC 4226 HOTP counter sync (v2.2.0) |
+| [15: encrypted sync & backup](phase-15-encrypted-backup-sync.md) | [15.1](sprints/15.1.md), [15.2](sprints/15.2.md) | Sovereign Age/Argon2id encrypted vault and WebDAV / S3 sync (v2.3.0) |
+| [16: universal migrators](phase-16-universal-importers-exporters.md) | [16.1](sprints/16.1.md), [16.2](sprints/16.2.md) | Aegis, 2FAS, Ente, Google Protobuf, and password manager importers (v2.4.0) |
+| [17: desktop launchers](phase-17-desktop-launchers.md) | [17.1](sprints/17.1.md), [17.2](sprints/17.2.md) | Waybar/Polybar streaming, Raycast, Alfred, and Rofi/Wofi pickers (v2.5.0) |
+| [18: cloud vaults](phase-18-enterprise-cloud-vaults.md) | [18.1](sprints/18.1.md), [18.2](sprints/18.2.md) | HashiCorp Vault, AWS, GCP, and Azure Key Vault federation (v2.6.0) |
+| [19: hardware key admin](phase-19-hardware-key-management.md) | [19.1](sprints/19.1.md), [19.2](sprints/19.2.md) | YubiKey OATH touch policy enforcement and virtual CTAP2 CI loopback (v2.7.0) |
+| [20: native accelerator](phase-20-native-accelerator.md) | [20.1](sprints/20.1.md), [20.2](sprints/20.2.md) | PyO3 native Rust cryptographic engine and zero-copy IPC ring buffer (v2.8.0) |
+| [21: nextgen TUI](phase-21-tui-nextgen.md) | [21.1](sprints/21.1.md), [21.2](sprints/21.2.md) | Textual TUI 2.0 with circular countdown rings, tags, and webcam QR (v2.9.0) |
+| [22: passkey bridge](phase-22-passkey-bridge-v3.md) | [22.1](sprints/22.1.md), [22.2](sprints/22.2.md) | FIDO2 Passkey software authenticator and WebAuthn assertion bridge (v3.0.0) |
 
 Phase 4 is optional. Neither pass-otp nor totpm is required for the 1Password-only base.
 The existing [foundation checklist](00-foundation.md) is a milestone-level preflight aid;
 the detailed phase/sprint plans define the ordered work. T-AUTH-001, T-AUTH-002, and
-T-AUTH-003 remain milestone aliases, distinct from task IDs T-AUTH-010 through T-AUTH-127.
+T-AUTH-003 remain milestone aliases, distinct from task IDs T-AUTH-010 through T-AUTH-227.
 
 ## Execution discipline
 

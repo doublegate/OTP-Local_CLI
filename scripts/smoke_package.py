@@ -69,7 +69,7 @@ def main():
                 "-B",
                 "-c",
                 "from authy_local import tui, installer, optional_setup; "
-                "from authy_local.backends import local; import textual",
+                "from authy_local.backends import local; import textual, fido2, pluggy",
             ],
             cwd=home,
             env=env,

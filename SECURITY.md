@@ -8,21 +8,33 @@ non-negotiable security invariants:
 
 1. **Local and Offline Execution**: The application makes zero outbound network connections.
    No telemetry, no remote APIs, and no external tracking are permitted.
-2. **Strict File Permissions**: Exported credential vaults and configuration files are
-   enforced with `0600` file modes (read/write only by the user). State directories and
-   cache roots are created with `0700` directory modes.
-3. **Fail-Closed Architecture**: Malformed input, untrusted scopes, invalid tokens, or
-   missing cryptographic dependencies result in immediate fail-closed termination.
-4. **Memory Hygiene**: In-memory secret buffers, keys, and session representations are
-   explicitly zeroed and cleared upon modal dismissal or session agent auto-lock.
-5. **Zero Diagnostic Leakage**: Child process errors, backtraces, and exceptions must never
-   contain decrypted secrets, seeds, or private parameters in standard output or error streams.
+2. **Strict File Permissions & Symlink Defense**: Exported credential vaults, plugin allowlists,
+   and configuration files are enforced with `0600` file modes inside `0700` state/config
+   directories. Importers open files atomically using `os.open(..., os.O_NOFOLLOW)` and verify
+   regular-file inodes via `os.fstat(fd)` to prevent TOCTOU symlink substitution.
+3. **Fail-Closed Architecture & Input Bounds**: Malformed input, untrusted scopes, invalid tokens,
+   non-positive daemon PIDs (`pid <= 0`), or missing cryptographic dependencies result in
+   immediate fail-closed termination. Hardware account labels are restricted to strict
+   `[A-Za-z0-9][A-Za-z0-9_.:@-]{0,63}\Z` bounds, and native C PAM requests apply RFC 8259 JSON
+   escaping with stack zeroization (`explicit_bzero`).
+4. **Runtime Memory Forensics & Zeroization**: Process memory is protected via `mlockall`,
+   `prctl(PR_SET_DUMPABLE, 0)`, `setrlimit(RLIMIT_CORE, (0, 0))`, and `madvise(MADV_DONTDUMP)`
+   on mutable bytearray `SecureBuffer` instances. Secret buffers and Textual modal credential
+   widgets are deterministically overwritten via `ctypes.memset` upon modal dismissal/unmount,
+   session lock, or process termination signals (`SIGINT`, `SIGTERM`, `SIGHUP`).
+5. **Zero Diagnostic Leakage**: Sensitive fields (`OtpParameters.secret`, subprocess outputs)
+   enforce `field(repr=False)` masking, and a top-level CLI exception shield intercepts
+   unhandled exceptions so tracebacks never leak decrypted secrets to standard output or error.
+
+See [Security Architecture & Vulnerability Mitigation](docs/specs/06-security-architecture.md)
+for detailed runtime boundary specifications and dependency audit records.
 
 ## Supported Versions
 
 | Version | Supported |
 | --- | --- |
-| 1.0.x | Yes |
+| 2.0.x (LTS) | Yes |
+| 1.x | Security fixes only |
 | < 1.0.0 | No |
 
 ## Reporting a Vulnerability

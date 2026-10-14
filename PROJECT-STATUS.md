@@ -1,37 +1,40 @@
 # Project status
 
-This file is the authority for project progress. Last reviewed: 2026-10-13
+This file is the authority for project progress. Last reviewed: 2026-10-14
 (America/New_York).
 
 ## Current state
 
-Phases 0–6 and the modern Textual TUI migration are complete. The software is
-formally released and installed as version 1.1.0. The package provides system
-diagnostics (`doctor` with automated `--install`/`--fix` Homebrew capability remediation),
-scoped retrieval and clipboard handoff (`show`/`copy`/`select`), interactive 1Password session
-`unlock`, desktop quick-picking (`pick`), bulk `import` and `export`, credential `audit`,
-terminal `qr` rendering, an ephemeral `agent` daemon with systemd socket activation, and
-Apple Secure Enclave & macOS Keychain backend integration. `otp-local tui` provides a modern
-Textual dashboard supporting six credential backends (1Password, pass-otp/GPG,
-totpm/TPM 2.0, YubiKey OATH, hardware TPM 2.0, and macOS Keychain).
+Phases 0–12 are complete, and Phases 13–22 are scaffolded for the v2.1.0–v3.0.0 LTS
+strategic roadmap. The software is formally released and verified as version 2.0.1 LTS.
+The package provides cross-platform system diagnostics (`doctor` with automated `--install`/`--fix`
+capability remediation for macOS Homebrew, Linux `apt`/`pacman`/`dnf`, and Windows `winget`/`scoop`),
+scoped retrieval and clipboard handoff (`show`/`copy`/`select`/`list`/`search`), interactive 1Password session
+`unlock`, desktop quick-picking (`pick`), bulk `import` and `export` with TOCTOU-free `O_NOFOLLOW` symlink defense,
+autonomous credential `audit` (`SEC-001` through `SEC-007` with `--rotate`), terminal `qr` rendering, a 16-worker
+resident UNIX socket `daemon` with zero-copy POSIX shared-memory seqlock ring buffers (`~2.2 us`), native Linux PAM
+integration (`pam_otp_local.so`), a non-blocking `asyncio` federation engine (`3.75x` speedup), and a `pluggy`
+plugin hook architecture. `otp-local tui` provides a modern Textual dashboard supporting nine credential backends
+(`onepassword`, `bitwarden`, `keepass`, `pass-otp`, `totpm`, `yubikey`, `tpm2-totp`, `keychain`, `dpapi`, `fido2`)
+plus unified multi-vault `federated` resolution.
 
-Automated validation uses synthetic data across 770 unit, integration, and E2E
-regression tests with a 100% pass rate. The operator approved the exact home
-installation and verified live operations. Checkpoint A disposable acceptance
+Automated validation uses synthetic data across 1,258 tests (1,140 unit/integration and 118 opaque-box E2E
+tests, plus 852 subtests) with a 100% pass rate and 7 authentic microbenchmarks meeting all SLAs. The operator
+approved the exact home installation and verified live operations. Checkpoint A disposable acceptance
 and Checkpoint B pilot-001 passed on operator attestation.
 
 | Area | State | Evidence |
 |---|---|---|
 | Agent guidance | Configured | Inline Master-Claude core 0.2.0; canonical AGENTS.md with sibling symlinks |
-| Entry point and plan | Final release 1.1.0 delivered; gates verified | Seven phases; fifteen sprints; 52 completed tasks |
+| Entry point and plan | Released v2.0.1 LTS delivered; v3.0 roadmap scaffolded | 22 phases (0–12 complete, 13–22 planned); 45 sprints; 188 allocated tasks |
 | Migration reference | Preserved; derived baseline researched | Immutable v2 runbook, clarification, docs/00-index.md |
-| CLI/TUI and fish | Released v1.1.0 installed and verified | Six backends, hidden local enrollment, Textual dashboard, guides, wrappers |
-| Reversible installation | Operator-approved and applied | docs/2026-10-12-installation-preview.md; ownership, repeat preview and help/version pass |
-| Host prerequisites | Read-only snapshot verified | docs/2026-10-12-phase-0-readiness.md |
+| CLI/TUI and shells | Released v2.0.1 installed and verified | 9 backends + federated resolver, Textual TUI, fish/bash/zsh/pwsh/nu wrappers |
+| Reversible installation | Operator-approved and applied | docs/operations/2026-10-12-installation-preview.md; wheelhouse staging & smoke pass |
+| Host prerequisites | Read-only snapshot verified | docs/operations/2026-10-12-phase-0-readiness.md |
 | Human 1Password readiness | Operator-attested pass | Desktop unlock and scoped CLI approval; Checkpoint A disposable acceptance passed |
 | Account migration | Pilot migrated, operator-attested | pilot-001: total 1, migrated 1, blocked 0, pending 0; full inventory unknown |
-| Automated tests/lint/build | All quality gates pass | 799 tests; 100% pass rate; ruff clean, markdownlint clean |
-| Version control | Standalone local main; no remote | Host-level Git verification; no remote push requested |
+| Automated tests/lint/build | All quality gates pass | 1,258 tests (1,140 unit/integration + 118 E2E); 7/7 benchmarks; ruff & markdownlint clean |
+| Version control | GitHub `doublegate/OTP-Local_CLI` synced | Tagged releases through v2.0.1; GitHub Actions CI & Release workflows green |
 
 ## Milestones
 
@@ -49,6 +52,7 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | T-AUTH-010: Bitwarden & KeePassXC Multi-Vault Federation | Complete | S-AUTH-10.1 and S-AUTH-10.2 complete; Bitwarden, KeePassXC, and FederatedResolver pass |
 | T-AUTH-011: Memory Forensics Hardening & Security Auditor v2 | Complete | S-AUTH-11.1 and S-AUTH-11.2 complete; mlock, madvise_dontdump, SecureBuffer, and Auditor v2 pass |
 | T-AUTH-012: Universal Async Core, Plugin Engine & v2.0.0 LTS | Complete | S-AUTH-12.1 and S-AUTH-12.2 complete; AsyncCore, JSON-RPC, pluggy plugins, and frozen API pass |
+| T-AUTH-013: v2.0.1 CI Repair, Security Hardening & Performance Release | Complete | Milestones M1–M5 & Victory Audit pass; 1,258 tests, 7 benchmarks, and v2.1–v3.0 roadmap complete |
 
 ## Phase and capability matrix
 
@@ -67,19 +71,20 @@ and Checkpoint B pilot-001 passed on operator attestation.
 | 10 Multi-Vault Federation | Complete | Sprints 10.1 and 10.2 complete; Bitwarden, KeePassXC, and multi-vault federation pass |
 | 11 Security auditor v2 | Complete | Sprints 11.1 and 11.2 complete; memory forensics hardening, entropy analysis, and rotation advisor pass |
 | 12 Universal async & plugins | Complete | Sprints 12.1 and 12.2 complete; non-blocking async core, pluggy plugin engine, and public API freeze pass |
+| 13–22 v2.1.0 – v3.0.0 LTS Roadmap | Planned (Scaffolded) | Sprints 13.1–22.2 (`T-AUTH-130`–`T-AUTH-227`) and Specs 20–23 scaffolded and verified |
 
-Package version is 2.0.0.
+Package version is 2.0.1.
 
 ## Metrics and timeline
 
 | Metric | Snapshot | Source |
 |---|---|---|
-| Derived specification | Fourteen numbered guides and eight ADRs | docs/00-index.md |
-| Delivery plan | Twelve phases; twenty-five sprints; 88 completed tasks | to-dos/README.md and sprint files |
-| Software/test/release | v2.0.0 (Phase 12 complete) / 902 tests pass / 100% pass rate | tests/ |
-| Coverage | 94% aggregate; validator/1Password adapter 100% | Branch-inclusive coverage report; blocking floors 90% / 100% |
+| Derived specification | Twenty-four numbered specs and fourteen ADRs | docs/00-index.md |
+| Delivery plan | Twenty-three phases (0–22); forty-five sprints; 188 allocated tasks | to-dos/README.md and sprint files |
+| Software/test/release | v2.0.1 LTS / 1,258 tests pass (1,140 unit/integration + 118 E2E) / 100% pass rate | tests/ |
+| Coverage & benchmarks | 80%+ branch coverage (100% on critical modules); 7/7 microbenchmarks pass | scripts/check.sh and benchmarks/run_all.py |
 | Account outcomes | Pilot: 1 migrated / 0 blocked / 0 pending; full inventory unknown | Checkpoint B operator attestation; no private inventory read |
-| Documentation validation | Authored files; links, task IDs and lint pass; reference hash unchanged | docs/00-index.md |
+| Documentation validation | 140 authored files; links, task IDs and lint pass; reference hash unchanged | scripts/check_docs.py |
 
 2026-10-11: established agent guidance, read the reference, researched primary
 sources and host prerequisites, and derived the architecture and full delivery plan.
@@ -127,15 +132,22 @@ with cryptographic in-memory zeroing of secret buffers upon dialogue dismissal. 
 test gate passed all 616 tests (495 subtests). See [specification](docs/specs/12-otp-enrollment.md)
 and [ADR 0008](docs/adr/0008-interactive-otp-enrollment.md).
 
-2026-10-13: delivered final release v1.0.0. Added hardware backends (`yubikey`, `tpm2-totp`),
-interactive 1Password session unlock (`otp-local unlock`), bulk URI list importer,
-systemd socket-activation (`authy-local-agent.socket`), in-TUI terminal QR and Security
-Audit modals, search filter modifiers (`type:`, `tag:`, `algo:`, `digits:`), and complete shell
-completions for fish, bash, and zsh. All 699 automated tests passed with a 100% pass rate.
+2026-10-13: delivered final release v1.0.0 through v2.0.0 LTS across Phases 7–12:
+Windows DPAPI & Credential Manager (`v1.2.0`), FIDO2 CTAP 2.1 hardware keys with touch presence (`v1.3.0`),
+resident UNIX socket daemon, POSIX shared memory ring buffer, and Linux PAM module (`v1.4.0`),
+Bitwarden and KeePassXC multi-vault federation (`v1.5.0`), runtime memory forensics (`mlock`/`MADV_DONTDUMP`)
+and Autonomous Security Auditor v2 (`v1.6.0`), and Universal Async Core, Pluggy plugin engine, and
+public API freeze (`v2.0.0 LTS`).
 
-2026-10-13: completed Sprints 7.1 and 7.2 (Windows DPAPI & Credential Manager backend, PowerShell 7+ module, NuShell module, WSL2 UNIX/named-pipe bridge). All 755 automated tests passed with a 100% pass rate.
-
-2026-10-13: completed Sprint 8.1 (FIDO2 CTAP 2.1 hardware key core, HMAC-secret derivation, AES-256-GCM seed encryption, and synthetic CTAP2 device mock suite). All 770 automated tests passed with a 100% pass rate.
+2026-10-14: delivered release v2.0.1 LTS and scaffolded the v2.1.0–v3.0.0 LTS roadmap (Phases 13–22,
+Sprints 13.1–22.2, `T-AUTH-130`–`T-AUTH-227`, Specs 20–23). Resolved all GitHub Actions CI runner gaps
+(`libpam0g-dev`, Node.js 22 LTS, wheel dependency regex for `fido2` and `pluggy`), hardened filesystem and
+memory boundaries (`O_NOFOLLOW` TOCTOU defense, `field(repr=False)` secret shielding, daemon `pid <= 0` bounds,
+C PAM RFC 8259 JSON escaping and stack zeroization, Textual modal unmount zeroization), optimized hot-paths
+(`2.2 us` seqlock SHM reads, `31 us` 16-worker IPC, `3.75x` `asyncio.as_completed` federation, `1.5 ms` TUI
+debounced search), and added CLI `list`, `search`, `daemon restart`, `daemon clean`, and multi-distro Linux
+`doctor --install` remediation. Verified across 1,258 passing tests (1,140 unit/integration + 118 E2E) and
+7 authentic microbenchmarks.
 
 ## Open decisions and limits
 

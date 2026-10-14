@@ -310,3 +310,55 @@ class TestFido2Backend(unittest.TestCase):
         fido2._set_device_override([primary_dev])
         code_primary = fido2.fido2_code(account, self.env, timestamp=1234567.0)
         self.assertEqual(code_primary, expected_code)
+
+    def test_fido2_probe_empty_device_list_safe(self) -> None:
+        fido2._set_device_override([])
+        res = fido2.probe(self.env)
+        self.assertEqual(res["state"], "missing")
+        self.assertEqual(res["device_count"], 0)
+        self.assertFalse(res.get("hmac_secret", False))
+
+    def test_fido2_disconnected_device_in_loop(self) -> None:
+        broken_dev = MagicMock(spec=["ctap"])
+        broken_ctap = MagicMock()
+        broken_ctap.info = None
+        broken_ctap.get_info.side_effect = OSError("Device disconnected")
+        broken_dev.ctap = broken_ctap
+
+        good_dev = MockCtapHidDevice(has_hmac_secret=True)
+        fido2._set_device_override([broken_dev, good_dev])
+
+        dev, ctap = fido2.get_ctap2_device()
+        self.assertEqual(dev, good_dev)
+
+    def test_fido2_real_device_hmac_secret_not_falsely_reported(self) -> None:
+        plain_dev = MagicMock(spec=[])
+        plain_ctap = MagicMock()
+        plain_ctap.info.extensions = ["credProtect"]
+        plain_dev.ctap = plain_ctap
+
+        fido2._set_device_override([plain_dev])
+        res = fido2.probe(self.env)
+        self.assertEqual(res["state"], "missing")
+        self.assertFalse(res["hmac_secret"])
+
+    def test_fido2_code_device_disconnect_graceful_app_error(self) -> None:
+        account = "disc_acct"
+        secret = "JBSWY3DPEHPK3PXP"
+        good_dev = MockCtapHidDevice(has_hmac_secret=True)
+        fido2._set_device_override([good_dev])
+        fido2.fido2_enroll(account, secret, self.env)
+
+        # Disconnect device completely
+        fido2._set_device_override([])
+        with self.assertRaises(AppError) as cm:
+            fido2.fido2_code(account, self.env)
+        self.assertEqual(cm.exception.exit_code, 3)
+
+        # Device raises OSError during assertion
+        disc_dev = MockCtapHidDevice(has_hmac_secret=True)
+        disc_dev.mock_assertion = MagicMock(side_effect=OSError("USB disconnected"))
+        fido2._set_device_override([disc_dev])
+        with self.assertRaises(AppError) as cm2:
+            fido2.fido2_code(account, self.env)
+        self.assertEqual(cm2.exception.exit_code, 3)

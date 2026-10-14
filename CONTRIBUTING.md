@@ -48,12 +48,15 @@ specification:
 Before submitting a pull request, ensure all local validation gates pass cleanly:
 
 ```sh
-# Run comprehensive validation suite
+# Run comprehensive CI validation suite (builds wheel, runs 1,258 tests + coverage + linters + smoke)
 bash scripts/check.sh
 
+# Run performance microbenchmark suite (verifies all 7 hot-path SLAs)
+.venv/bin/python benchmarks/run_all.py
+
 # Or execute individual quality gates:
-.venv/bin/ruff check --no-cache .
-.venv/bin/ruff format --no-cache --check .
+.venv/bin/ruff check --no-cache src tests scripts benchmarks
+.venv/bin/ruff format --no-cache --check src tests scripts benchmarks
 npx markdownlint-cli2
 .venv/bin/python scripts/check_docs.py
 .venv/bin/pytest -o cache_dir=/tmp/pytest_cache -q

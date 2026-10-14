@@ -312,6 +312,27 @@ def install_signal_handlers() -> None:
                     pass
 
 
+def init_runtime_security(enable_mlock: bool = False, **kwargs: Any) -> dict[str, bool]:
+    """Initialize process runtime security: disable core dumps, install signal hooks, and optionally lock memory.
+
+    Args:
+        enable_mlock: If True, calls lock_process_memory() to lock memory pages into physical RAM.
+                      Defaults to False.
+
+    Returns:
+        dict[str, bool]: Execution status of initialized security primitives.
+    """
+    lock_mem = enable_mlock or kwargs.get("lock_memory", False)
+    coredumps = disable_core_dumps()
+    install_signal_handlers()
+    locked = lock_process_memory() if lock_mem else False
+    return {
+        "core_dumps_disabled": coredumps,
+        "signal_handlers_installed": True,
+        "memory_locked": locked,
+    }
+
+
 def memory_security_status() -> dict[str, Any]:
     """Inspect and report process memory security posture for diagnostics."""
     libc = get_libc()
