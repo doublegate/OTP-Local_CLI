@@ -213,10 +213,12 @@ class TestCliSubcommands(unittest.TestCase):
         mock_copy.assert_called_once_with("112233", unittest.mock.ANY)
         self.assertIn("Code copied to clipboard", err.getvalue())
 
+    @patch("authy_local.daemon.pid_path")
     @patch("authy_local.daemon.daemon_start", return_value=0)
     @patch("authy_local.daemon.daemon_stop", return_value=0)
-    def test_daemon_restart_dispatch(self, mock_stop, mock_start) -> None:
+    def test_daemon_restart_dispatch(self, mock_stop, mock_start, mock_pid_path) -> None:
         """Verify daemon restart subcommand executes stop and start sequence."""
+        mock_pid_path.return_value.exists.return_value = True
         out = io.StringIO()
         err = io.StringIO()
         code = cli.main(["daemon", "restart"], stdout=out, stderr=err)

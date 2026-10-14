@@ -134,6 +134,7 @@ class TestShmSeqlockTornReadStress(unittest.TestCase):
     def test_seqlock_multi_threaded_torn_read_stress(self) -> None:
         """Verify 0 torn reads occur across 80,000 rapid concurrent reads during active writes."""
         stop_event = threading.Event()
+        ready_event = threading.Event()
         writes_done = [0]
         successful_reads = [0]
         torn_reads = [0]
@@ -156,10 +157,14 @@ class TestShmSeqlockTornReadStress(unittest.TestCase):
                     period=period,
                 )
                 writes_done[0] += 1
+                if epoch >= 50 and not ready_event.is_set():
+                    ready_event.set()
 
         def reader_loop():
             reader_shm = ShmRingBuffer(name=self.shm_name, create=False)
-            for _ in range(10000):
+            for idx in range(10000):
+                if idx % 250 == 0:
+                    time.sleep(0)
                 res = reader_shm.read_slot("victim_thread_acct")
                 if res is not None:
                     successful_reads[0] += 1
@@ -174,6 +179,7 @@ class TestShmSeqlockTornReadStress(unittest.TestCase):
 
         w_thread = threading.Thread(target=writer_loop)
         w_thread.start()
+        ready_event.wait(timeout=5.0)
 
         readers = [threading.Thread(target=reader_loop) for _ in range(8)]
         for t in readers:
