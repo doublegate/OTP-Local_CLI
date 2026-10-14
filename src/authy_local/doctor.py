@@ -32,10 +32,15 @@ def report(env: dict[str, str]) -> dict:
         if pbcopy_path:
             result["wl-copy"] = {"state": "available", "path": pbcopy_path}
             result["pbcopy"] = {"state": "available", "path": pbcopy_path}
+        else:
+            result["pbcopy"] = {"state": "missing"}
     elif sys.platform == "win32":
+        result["pbcopy"] = {"state": "not-applicable"}
         clip_path = shutil.which("clip", path=env.get("PATH", ""))
         if clip_path:
             result["wl-copy"] = {"state": "available", "path": clip_path}
+    else:
+        result["pbcopy"] = {"state": "not-applicable"}
 
     pinentry_path = (
         shutil.which("pinentry", path=env.get("PATH", ""))

@@ -509,6 +509,11 @@ class TestCliDoctorFlags(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         mock_install.assert_called_once()
 
+    @patch("sys.platform", "linux")
+    def test_pbcopy_not_applicable_on_linux(self) -> None:
+        rep = doctor.report({"PATH": "/usr/bin"})
+        self.assertEqual(rep.get("pbcopy", {}).get("state"), "not-applicable")
+
 
 if __name__ == "__main__":
     unittest.main()

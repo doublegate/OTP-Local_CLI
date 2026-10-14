@@ -186,7 +186,7 @@ class FederatedResolver:
     def __init__(self, candidate_backends: list[str] | None = None) -> None:
         self.candidate_backends = candidate_backends or list(ALL_SUPPORTED_BACKENDS)
 
-    def resolve_all(self, env: dict[str, str], timeout: float = 2.0) -> list[FederatedToken]:
+    def resolve_all(self, env: dict[str, str], timeout: float = 5.0) -> list[FederatedToken]:
         """Query all candidate backends concurrently and merge deduplicated tokens."""
         by_normalized: dict[str, FederatedToken] = {}
         if not self.candidate_backends:
@@ -237,17 +237,30 @@ class FederatedResolver:
 
         return sorted(tokens, key=lambda t: t.title.lower())
 
-    def search(self, query: str, env: dict[str, str], timeout: float = 2.0) -> list[FederatedToken]:
-        """Search tokens across all vaults matching the given substring or fuzzy pattern."""
+    def search(self, query: str, env: dict[str, str], timeout: float = 5.0) -> list[FederatedToken]:
+        """Search tokens across all vaults matching the given key, substring, or fuzzy pattern."""
         all_tokens = self.resolve_all(env, timeout=timeout)
         if not query:
             return all_tokens
         q = query.lower().strip()
-        matched = []
+        exact_matched = []
+        fuzzy_matched = []
         for tok in all_tokens:
-            if q in tok.title.lower() or q in tok.badge.lower():
-                matched.append(tok)
-        return matched
+            if (
+                q == tok.key.lower()
+                or q == tok.title.lower()
+                or q == tok.display_label.lower()
+                or any(q == str(k).lower() for k in tok.backend_keys.values())
+            ):
+                exact_matched.append(tok)
+            elif (
+                q in tok.title.lower()
+                or q in tok.badge.lower()
+                or q in tok.key.lower()
+                or any(q in str(k).lower() for k in tok.backend_keys.values())
+            ):
+                fuzzy_matched.append(tok)
+        return exact_matched if exact_matched else fuzzy_matched
 
     def retrieve_code(
         self,

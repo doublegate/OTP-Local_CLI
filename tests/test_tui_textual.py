@@ -499,3 +499,30 @@ class TestTextualTuiFoundation(unittest.IsolatedAsyncioTestCase):
             await pilot.pause()
 
             await pilot.press("q")
+
+    async def test_federated_browse_and_saved_scope_no_validation_error(self) -> None:
+        """Verify federated, bitwarden, and keepass backends open browser directly and dismiss SavedScopeModal cleanly."""
+        from authy_local.tui import SavedScopeModal, TokenBrowserScreen
+
+        app = AuthyApp(dispatch=self.dummy_dispatch)
+        async with app.run_test() as pilot:
+            app.current_backend = "federated"
+            await pilot.pause()
+
+            # Saved scope ('p') for federated should dismiss cleanly on Enter/Save without validation failure
+            await pilot.press("p")
+            await pilot.pause()
+            self.assertIsInstance(app.screen, SavedScopeModal)
+            app.screen.on_save_pressed()
+            await pilot.pause()
+            self.assertIsInstance(app.screen, DashboardScreen)
+
+            # Browse and show ('1') for federated should open TokenBrowserScreen directly without SavedScopeModal
+            with patch.object(app, "aload_records", return_value=[("item1", "GitHub [BW]")]):
+                await pilot.press("1")
+                await pilot.pause()
+                self.assertIsInstance(app.screen, TokenBrowserScreen)
+                await pilot.press("escape")
+                await pilot.pause()
+
+            await pilot.press("q")

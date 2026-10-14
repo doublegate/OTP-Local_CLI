@@ -29,8 +29,8 @@ def get_default_kdbx_path(env: dict[str, str]) -> Path:
         base = Path(state_dir) / "authy-local"
     else:
         base = Path.home() / ".local/share/authy-local"
-    base.mkdir(parents=True, exist_ok=True)
     try:
+        base.mkdir(parents=True, exist_ok=True)
         base.chmod(0o700)
     except OSError:
         pass

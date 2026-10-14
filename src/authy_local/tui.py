@@ -70,6 +70,9 @@ BACKENDS = (
     ("keychain", "macOS Keychain"),
     ("dpapi", "Windows DPAPI"),
     ("fido2", "FIDO2 Security Key"),
+    ("bitwarden", "Bitwarden Vault"),
+    ("keepass", "KeePassXC Database"),
+    ("federated", "All Vaults (Federated Multi-Vault)"),
 )
 PROFILE_FIELDS = {
     "onepassword": ("account", "vault"),
@@ -80,6 +83,9 @@ PROFILE_FIELDS = {
     "keychain": (),
     "dpapi": (),
     "fido2": (),
+    "bitwarden": (),
+    "keepass": (),
+    "federated": (),
 }
 HELP = (
     "Keyboard controls",
@@ -1334,33 +1340,37 @@ def fast_highlight_match(
 
     raw = text.casefold()
 
-    # Strategy 1: Contiguous substring match
+    # Strategy 1: Contiguous substring match (bounded to 256 spans against DoS)
     if cq.q_norm:
         sub = raw.find(cq.q_norm)
         if sub != -1:
             start = 0
             step = len(cq.q_norm)
-            while True:
+            spans = 0
+            while spans < 256:
                 idx = raw.find(cq.q_norm, start)
                 if idx == -1:
                     break
                 t.stylize(highlight_style, idx, idx + step)
                 start = idx + step
+                spans += 1
             return t
 
-    # Strategy 2: Multi-word query
+    # Strategy 2: Multi-word query (bounded to 256 spans against DoS)
     if cq.has_words:
         matched = False
+        spans = 0
         for w in cq.words:
             start = 0
             step = len(w)
-            while True:
+            while spans < 256:
                 idx = raw.find(w, start)
                 if idx == -1:
                     break
                 t.stylize(highlight_style, idx, idx + step)
                 matched = True
                 start = idx + step
+                spans += 1
         if matched:
             return t
 
@@ -2089,9 +2099,18 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
                         max_length=1024,
                         id="scope-totpm-config",
                     )
-                elif self.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
+                elif self.backend in (
+                    "yubikey",
+                    "tpm2-totp",
+                    "keychain",
+                    "dpapi",
+                    "fido2",
+                    "bitwarden",
+                    "keepass",
+                    "federated",
+                ):
                     yield Static(
-                        "Hardware/System backend accesses token directly via secure interface."
+                        "Hardware/System/Federated backend accesses tokens directly via secure interface."
                     )
                     yield Static("No scope configuration file or path parameters required.")
             yield Static("", id="scope-error-banner")
@@ -2137,8 +2156,19 @@ class SavedScopeModal(ModalScreen[dict[str, str] | None]):
         elif self.backend == "totpm":
             config = self.query_one("#scope-totpm-config", Input).value.strip()
             scope_dict = {"config": config}
-        elif self.backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
-            self.app.notify(f"Backend {self.backend} needs no saved file scope.")
+        elif self.backend in (
+            "yubikey",
+            "tpm2-totp",
+            "keychain",
+            "dpapi",
+            "fido2",
+            "bitwarden",
+            "keepass",
+            "federated",
+        ):
+            self.app.notify(
+                f"{dict(BACKENDS).get(self.backend, self.backend)} needs no saved file scope."
+            )
             self.dismiss({})
             return
 
@@ -4845,7 +4875,16 @@ class AuthyApp(App):
 
     def _ensure_scope_and_run(self, action_mode: str) -> None:
         backend = self.current_backend
-        if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
+        if backend in (
+            "yubikey",
+            "tpm2-totp",
+            "keychain",
+            "dpapi",
+            "fido2",
+            "bitwarden",
+            "keepass",
+            "federated",
+        ):
             self._prompt_item_and_execute(backend, action_mode)
             return
         if backend not in self.profiles:
@@ -4941,7 +4980,16 @@ class AuthyApp(App):
 
     def _open_browser(self, default_action: str) -> None:
         backend = self.current_backend
-        if backend in ("yubikey", "tpm2-totp", "keychain", "dpapi", "fido2"):
+        if backend in (
+            "yubikey",
+            "tpm2-totp",
+            "keychain",
+            "dpapi",
+            "fido2",
+            "bitwarden",
+            "keepass",
+            "federated",
+        ):
             self._launch_browser(backend, default_action)
             return
         if backend not in self.profiles:

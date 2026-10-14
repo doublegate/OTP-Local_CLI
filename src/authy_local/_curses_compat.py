@@ -437,6 +437,9 @@ def configure_scope(screen, curses, backend, profile):
         "keychain": {},
         "dpapi": {},
         "fido2": {},
+        "bitwarden": {},
+        "keepass": {},
+        "federated": {},
     }
     fields = scope_fields(backend)
     initial = [(profile or defaults[backend])[name] for name in PROFILE_FIELDS[backend]]

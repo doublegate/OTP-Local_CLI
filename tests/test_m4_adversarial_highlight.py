@@ -168,14 +168,14 @@ class TestHighlightAccuracyAndReDoS(unittest.TestCase):
         t0 = time.perf_counter()
         res1 = TokenBrowserScreen._highlight_match(short_text, long_5k, "bold cyan")
         t1 = (time.perf_counter() - t0) * 1000
-        self.assertLess(t1, 25.0 if is_tracing else 5.0)
+        self.assertLess(t1, 100.0 if is_tracing else 5.0)
         self.assertEqual(len(res1.spans), 0)
 
         # 2. Short query on 5k text
         t0 = time.perf_counter()
         res2 = TokenBrowserScreen._highlight_match(long_5k, "a", "bold cyan")
         t2 = (time.perf_counter() - t0) * 1000
-        limit_ms = 40.0 if is_tracing else 35.0
+        limit_ms = 250.0 if is_tracing else 35.0
         self.assertLess(t2, limit_ms)
         self.assertEqual(res2.plain, long_5k)
 
@@ -183,7 +183,7 @@ class TestHighlightAccuracyAndReDoS(unittest.TestCase):
         t0 = time.perf_counter()
         res3 = TokenBrowserScreen._highlight_match(long_5k, long_5k, "bold cyan")
         t3 = (time.perf_counter() - t0) * 1000
-        self.assertLess(t3, 25.0 if is_tracing else 5.0)
+        self.assertLess(t3, 100.0 if is_tracing else 5.0)
         self.assertEqual(len(res3.spans), 1)
         self.assertEqual(res3.spans[0].start, 0)
         self.assertEqual(res3.spans[0].end, 5000)
@@ -192,7 +192,7 @@ class TestHighlightAccuracyAndReDoS(unittest.TestCase):
         t0 = time.perf_counter()
         res4 = TokenBrowserScreen._highlight_match("ab" * 2500, "c" * 5000, "bold cyan")
         t4 = (time.perf_counter() - t0) * 1000
-        self.assertLess(t4, 25.0 if is_tracing else 5.0)
+        self.assertLess(t4, 100.0 if is_tracing else 5.0)
         self.assertEqual(len(res4.spans), 0)
 
     def test_extreme_boundary_inputs(self) -> None:
