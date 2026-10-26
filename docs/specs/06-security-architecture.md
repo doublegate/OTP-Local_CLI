@@ -35,7 +35,7 @@ cryptographic secrets across five defense-in-depth boundaries:
 | Package | `braces` (versions `<= 3.0.3`) |
 | Advisory | [GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) / CVE-2026-93687 |
 | Severity | High (CWE-674: Uncontrolled Recursion / Stack Exhaustion) |
-| Hierarchy | `markdownlint-cli2@0.23.3` -> `globby` -> `fast-glob` -> `micromatch` -> `braces@3.0.3` |
+| Hierarchy | `markdownlint-cli2@0.24.0` -> `globby` -> `fast-glob` -> `micromatch` -> `braces@3.0.3` |
 | Scope | Development-only linting tool invoked during `scripts/check.sh` and CI documentation checks. |
 
 ### Technical Analysis & Risk Assessment
@@ -53,7 +53,7 @@ cryptographic secrets across five defense-in-depth boundaries:
 - **Forced Downgrade Hazard**: Running `npm audit fix --force` would downgrade `markdownlint-cli2`
   to legacy versions (such as `0.21.0`), which introduces multiple critical vulnerabilities in
   `js-yaml` and `markdown-it`.
-- **Mitigation & Expiration**: Transitive dependencies `katex` and `smol-toml` are pinned to
-  patched versions (`katex@^0.18.2`, `smol-toml@^1.9.0`) via `overrides` in `package.json`.
+- **Mitigation & Expiration**: Transitive dependencies `katex`, `markdown-it`, and `smol-toml` are pinned to
+  patched versions (`katex@^0.19.1`, `markdown-it@^15.0.3`, `smol-toml@^1.9.1`) via `overrides` in `package.json`.
   This waiver remains active until an official `braces >= 3.0.4` release is published upstream,
   at which point the lockfile will be regenerated via `npm update braces`.
