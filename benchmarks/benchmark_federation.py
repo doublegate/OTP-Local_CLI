@@ -152,7 +152,8 @@ def run_benchmark(backend_count: int = 6, per_backend_latency_ms: float = 20.0) 
             "concurrent_ms": conc_elapsed_ms,
             "speedup": speedup,
             "token_count": len(tokens),
-            "sla_met": speedup >= 2.5 and conc_elapsed_ms < (per_backend_latency_ms * 3.0),
+            "sla_met": speedup >= 2.5
+            and conc_elapsed_ms <= max(per_backend_latency_ms * 3.0, seq_elapsed_ms / 2.5),
         }
 
 

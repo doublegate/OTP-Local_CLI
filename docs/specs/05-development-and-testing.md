@@ -16,9 +16,9 @@ Use a project virtual environment for development. Keep environments, coverage,
 build output and local state ignored. Do not install development dependencies into
 the system interpreter. Avoid runtime third-party dependencies and network tests.
 
-`requirements-dev.txt` pins setuptools 84.0.0, wheel 0.48.0, build 1.6.0,
-packaging 26.3, pyproject_hooks 1.3.3, Ruff 0.17.0 and coverage 7.16.2.
-`package.json` and its lock pin markdownlint-cli2 0.23.3 and its dependency tree.
+`requirements-dev.txt` pins setuptools 84.2.1, wheel 0.48.0, build 1.6.1,
+packaging 26.3, pyproject_hooks 1.3.3, Ruff 0.17.2 and coverage 7.17.0.
+`package.json` and its lock pin markdownlint-cli2 0.24.0 and its dependency tree.
 Dependency setup may download tools; the test suite must not contact providers.
 
 ```sh
