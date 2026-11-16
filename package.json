@@ -5,7 +5,7 @@
   "devDependencies": {
     "braces": "file:./scripts/vendor/braces",
     "fill-range": "^7.1.1",
-    "markdownlint-cli2": "0.24.0"
+    "markdownlint-cli2": "0.24.1"
   },
   "overrides": {
     "braces": "$braces",
